@@ -7,7 +7,7 @@ import { setQuiet } from '../../log';
 import { NameStore } from '../../model/names';
 import { Office, OFFLINE_GRACE_MS } from '../../model/office';
 import { tempDir } from '../../test/fixtures';
-import { buildOpencodeDb, HAS_SQLITE, ocId, toolPart, type OcFixture } from '../../test/opencode-fixtures';
+import { buildOpencodeDb, HAS_SQLITE, ocId, questionPart, toolPart, type OcFixture } from '../../test/opencode-fixtures';
 import { LIVE_HOLD_MS, OpencodeSource, PRESENCE_MS, QUESTION_TTL_MS } from './source';
 
 setQuiet(true);
@@ -545,5 +545,85 @@ describe.skipIf(!HAS_SQLITE)('fonte do OpenCode: perguntas ao vivo (question.*)'
     const once = JSON.stringify(ctx.office.get(key(S1)));
     ctx.source.applyHookEvent(asked());
     expect(JSON.stringify(ctx.office.get(key(S1)))).toBe(once);
+  });
+});
+
+describe.skipIf(!HAS_SQLITE)('fonte do OpenCode: pergunta pendente vista pelo banco, sem o plugin (OQ-07)', () => {
+  const QS = [
+    { question: 'Qual banco usar?', header: 'Banco', options: [{ label: 'SQLite', description: 'local' }, { label: 'Postgres', description: 'remoto' }], multiple: true },
+  ];
+
+  function withQuestion(opts: { completed?: boolean; status?: string } = {}) {
+    const ctx = setup();
+    const t = ctx.now();
+    ctx.fx.addSession({ id: S1, directory: '/p/a', updated: t });
+    const m = ctx.fx.addMessage({ session: S1, role: 'assistant', created: t - 100, ...(opts.completed ? { completed: t - 10 } : {}) });
+    const part = ctx.fx.addPart({ message: m, session: S1, created: t - 50, data: questionPart(QS, { status: opts.status }) });
+    return { ctx, m, part, t };
+  }
+
+  it('OQ-07: parte question running com o turno aberto: waiting com atividade ask e as 2 opções, sem evento ao vivo', async () => {
+    const { ctx } = withQuestion();
+    await ctx.source.start();
+    const a = ctx.agent(S1)!;
+    expect(a).toMatchObject({ status: 'waiting', waitingFor: 'responder uma pergunta' });
+    expect(a.activity).toMatchObject({ kind: 'ask', tool: 'AskUserQuestion' });
+    expect(a.activity?.questions).toEqual([
+      { index: 0, question: 'Qual banco usar?', header: 'Banco', multiSelect: true, options: [{ index: 0, label: 'SQLite', description: 'local' }, { index: 1, label: 'Postgres', description: 'remoto' }] },
+    ]);
+    ctx.advance(10_000);
+    expect(ctx.poll().agents.find((x) => x.id === key(S1))).toMatchObject({ status: 'waiting', activity: { kind: 'ask' } });
+  });
+
+  it('OQ-07: sessão já em andamento (working) passa a waiting quando a parte question aparece, e sai quando ela conclui', async () => {
+    const ctx = setup();
+    const t = ctx.now();
+    ctx.fx.addSession({ id: S1, directory: '/p/a', updated: t });
+    const m = ctx.fx.addMessage({ session: S1, role: 'assistant', created: t - 100 });
+    await ctx.source.start();
+    expect(ctx.agent(S1)?.status).toBe('working');
+    ctx.fx.addPart({ message: m, session: S1, created: t, data: questionPart(QS) });
+    const a = ctx.poll().agents.find((x) => x.id === key(S1))!;
+    expect(a).toMatchObject({ status: 'waiting', activity: { kind: 'ask' } });
+    ctx.fx.db.prepare("UPDATE part SET data = json_set(data, '$.state.status', 'completed') WHERE session_id = ? AND json_extract(data, '$.tool') = 'question'").run(S1);
+    const b = ctx.poll().agents.find((x) => x.id === key(S1))!;
+    expect(b.status).toBe('working');
+    expect(b.waitingFor).toBeUndefined();
+    expect(b.activity?.questions).toBeUndefined();
+  });
+
+  it('OQ-07: parte question esquecida em running depois que o turno do assistente completou não fica waiting', async () => {
+    const { ctx } = withQuestion({ completed: true });
+    await ctx.source.start();
+    expect(ctx.agent(S1)?.status).toBe('idle');
+    expect(ctx.agent(S1)?.activity?.questions).toBeUndefined();
+  });
+
+  it('parte question já concluída (turno aberto): working, não waiting', async () => {
+    const { ctx } = withQuestion({ status: 'completed' });
+    await ctx.source.start();
+    expect(ctx.agent(S1)?.status).toBe('working');
+  });
+
+  it('com o evento ao vivo da mesma pergunta o plugin vale: nada duplicado e waiting mantido', async () => {
+    const { ctx } = withQuestion();
+    await ctx.source.start();
+    ctx.source.applyHookEvent({ type: 'question.asked', properties: { id: 'que_1', sessionID: S1, questions: QS } });
+    ctx.advance(LIVE_HOLD_MS + 1_000);
+    const a = ctx.poll().agents.find((x) => x.id === key(S1))!;
+    expect(a.status).toBe('waiting');
+    ctx.source.applyHookEvent({ type: 'question.replied', properties: { sessionID: S1, requestID: 'que_1', answers: [['SQLite']] } });
+    expect(ctx.agent(S1)?.activity?.questions).toBeUndefined();
+  });
+
+  it('a pergunta no banco só entra com questionPart (privacidade): outra ferramenta running não vira ask', async () => {
+    const ctx = setup();
+    const t = ctx.now();
+    ctx.fx.addSession({ id: S1, directory: '/p/a', updated: t });
+    const m = ctx.fx.addMessage({ session: S1, role: 'assistant', created: t - 100 });
+    ctx.fx.addPart({ message: m, session: S1, created: t - 50, data: toolPart('bash', { title: 'ls' }) });
+    await ctx.source.start();
+    expect(ctx.agent(S1)?.status).toBe('working');
+    expect(ctx.agent(S1)?.activity?.kind).not.toBe('ask');
   });
 });

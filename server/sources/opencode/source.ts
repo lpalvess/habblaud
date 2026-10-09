@@ -15,7 +15,7 @@ import type { Office } from '../../model/office';
 import type { AgentSource } from '../source';
 import { SESSION_ID_RE, type OpencodeEvent, type OpencodeLive } from './live';
 import { describeOpencodePart, describeOpencodeTool } from './activity';
-import { DB_FILE, inSnapshot, lastMessage, lastPart, listSessions, openDb, todos, type OcDb, type OcSession, type OpenOptions } from './files';
+import { DB_FILE, inSnapshot, lastMessage, lastPart, listSessions, openDb, pendingQuestion, todos, type OcDb, type OcSession, type OpenOptions } from './files';
 
 /** Sessão sem escrita há mais que isto (ou arquivada) sai do escritório. */
 export const PRESENCE_MS = 30 * 60_000;
@@ -79,6 +79,8 @@ interface Tracker {
   tasksUntil?: number;
   /** Pergunta do OpenCode esperando resposta: segura o `waiting` sobre o banco até responder, idle ou QUESTION_TTL_MS. */
   pendingQuestion?: PendingQuestion;
+  /** Id da pergunta vista só no banco (sem o plugin) enquanto ela segue pendente; some quando o banco deixa de mostrá-la. */
+  diskQuestionId?: string;
 }
 
 const depthOf = (row: OcSession, byId: Map<string, OcSession>): number => {
@@ -104,6 +106,7 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
   private waiter: ReturnType<typeof setInterval> | null = null;
   private attaching = false;
   private lastPollAt = 0;
+  private diskSeq = 0;
   private stopped = false;
   private readonly now: () => number;
 
@@ -287,7 +290,8 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
     if (!cwd) return false;
     const office = this.opts.office;
     const msg = lastMessage(db, row.id, 'assistant');
-    let status: AgentStatus = msg && msg.completed === undefined ? 'working' : 'idle';
+    const diskStatus: AgentStatus = msg && msg.completed === undefined ? 'working' : 'idle';
+    let status: AgentStatus = diskStatus;
 
     let t = this.trackers.get(key);
     if (t?.pendingQuestion && now - t.pendingQuestion.since >= QUESTION_TTL_MS) this.clearQuestion(t, 'answered');
@@ -295,6 +299,11 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
     if (t && t.inOffice && t.liveUntil !== undefined && now < t.liveUntil) status = t.status;
     if (t && t.inOffice && !office.has(key)) t.inOffice = false; // saiu do escritório (período de graça encerrado)
     if (t?.pendingQuestion) status = 'waiting'; // pergunta sem resposta: o banco (turno aberto) não a desfaz
+    // Sem o plugin: a última parte `question` ainda `running` com o turno do assistente aberto = esperando a resposta (OQ-07).
+    // Só se olha o banco para isso com o turno aberto: um `running` esquecido de turno encerrado não prende o `waiting`.
+    const diskQuestions = !t?.pendingQuestion && diskStatus === 'working' ? pendingQuestion(db, row.id) : undefined;
+    if (diskQuestions) status = 'waiting';
+    else if (t) t.diskQuestionId = undefined;
     if (!t) {
       const parentKey = row.parentId ? `opencode:${row.parentId}` : undefined;
       const parent = parentKey ? this.trackers.get(parentKey) : undefined;
@@ -303,11 +312,18 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
       this.trackers.set(key, t);
     }
 
+    const showDisk = () => {
+      if (!diskQuestions || !t!.inOffice) return;
+      t!.diskQuestionId ??= `disk:${++this.diskSeq}`;
+      this.showQuestion(t!, t!.diskQuestionId, diskQuestions);
+    };
+    showDisk(); // antes de mudar o status: o balão já é a pergunta, sem o "Precisa de você" genérico no meio
     if (!t.inOffice) this.enter(t, row, cwd, status, now);
     else if (status !== t.status) this.setStatus(t, status, status === 'waiting' ? WAIT_QUESTION : undefined);
     t.status = status;
     t.title = row.title || undefined;
     if (!t.inOffice) return true;
+    showDisk();
 
     if (status === 'working') this.pushActivity(db, t, now);
     this.applySummary(db, t, row);
@@ -326,9 +342,10 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
         role: MAIN_ROLE,
         startedAt: now,
         status,
+        ...(status === 'waiting' ? { waitingFor: WAIT_QUESTION } : {}),
       });
       t.inOffice = office.has(t.key);
-      if (t.inOffice) office.setStatus(t.key, status); // reaberta durante o período de graça
+      if (t.inOffice) office.setStatus(t.key, status, status === 'waiting' ? WAIT_QUESTION : undefined); // reaberta durante o período de graça
       return;
     }
     const added = office.addSub({
@@ -345,6 +362,7 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
     t.subDone = false;
     // addSub começa em 'working': um subagente já ocioso entrega logo.
     if (status === 'idle') this.setStatus(t, status);
+    else if (status === 'waiting') this.setStatus(t, status, WAIT_QUESTION);
   }
 
   /** Leva o status ao escritório (o subagente entrega ao ficar ocioso e volta ao trabalhar). */
@@ -466,9 +484,7 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
         const qid = typeof props.id === 'string' ? props.id.slice(0, 100) : '';
         const prev = t.pendingQuestion;
         t.pendingQuestion = prev && prev.id === qid ? prev : { id: qid, since: this.now() };
-        const desc = describeTool('AskUserQuestion', askInput(props.questions));
-        const id = `${t.key}#ask:${qid || this.now()}`;
-        this.opts.office.addActivity(t.key, { id, at: this.now(), ...desc, tool: 'AskUserQuestion' }, true);
+        this.showQuestion(t, qid || String(this.now()), props.questions);
         this.liveStatus(t, 'waiting', WAIT_QUESTION);
         return true;
       }
@@ -495,6 +511,12 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
     t.liveUntil = this.now() + LIVE_HOLD_MS;
     if (t.status !== status || status === 'waiting') this.setStatus(t, status, waitingFor);
     t.status = status;
+  }
+
+  /** O balão com a pergunta e as opções (mesmo formato do AskUserQuestion do Claude), uma vez por id de pergunta. */
+  private showQuestion(t: Tracker, qid: string, rawQuestions: unknown): void {
+    const desc = describeTool('AskUserQuestion', askInput(rawQuestions));
+    this.opts.office.addActivity(t.key, { id: `${t.key}#ask:${qid}`, at: this.now(), ...desc, tool: 'AskUserQuestion' }, true);
   }
 
   /**
