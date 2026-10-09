@@ -260,6 +260,17 @@ describe('perguntas do OpenCode no registro de permissões (OQ-10, OQ-11, OQ-16)
     expect(office.commit().snapshot.agents.find((x) => x.id === OC_MAIN)?.permission).toBeUndefined();
   });
 
+  it('OQ-16: releaseOpencodeQuestions não solta pergunta de outro provider da MESMA sessão', async () => {
+    const { office, registry } = setup();
+    office.addMain({ id: 'acc:2', account: 'acc', sessionId: SES, cwd: '/p/loja', role: 'Agente principal', startedAt: 0, status: 'working' });
+    const claude = idOf(registry.register({ session_id: SES, tool_name: 'AskUserQuestion', tool_input: { questions: QUESTIONS }, cwd: '/p/loja', timeout_ms: 30_000 }));
+    const oc = idOf(registry.register(ask()));
+    expect(registry.releaseOpencodeQuestions(SES)).toBe(1);
+    expect(await result(registry, oc)).toEqual({ status: 'released', reason: 'answered' });
+    expect(registry.decide(claude, { behavior: 'deny' })).toBe('ok'); // continua pendente
+    expect(registry.releaseOpencodeQuestions(SES)).toBe(0);
+  });
+
   it('opencodeToolView: AskUserQuestion devolve título, texto e as perguntas mascaradas; entrada hostil não quebra', () => {
     const v = opencodeToolView('AskUserQuestion', { questions: [{ question: 'Use Authorization: Bearer abcdef123456?', options: [{ label: 'Sim' }] }] });
     expect(v).toMatchObject({ icon: '❓', questions: [{ index: 0, options: [{ index: 0, label: 'Sim' }] }] });
