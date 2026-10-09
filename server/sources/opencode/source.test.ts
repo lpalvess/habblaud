@@ -510,6 +510,24 @@ describe.skipIf(!HAS_SQLITE)('fonte do OpenCode: perguntas ao vivo (question.*)'
     expect(a.activity?.questions).toBeUndefined();
   });
 
+  it('OQ-05: pergunta respondida direto no OpenCode, sem página aberta (só o evento ao vivo): o ciclo seguinte troca o balão ask e segue as regras do banco', async () => {
+    const ctx = await workingSession();
+    ctx.source.applyHookEvent(asked());
+    expect(ctx.agent(S1)?.activity?.kind).toBe('ask');
+    expect(ctx.source.applyHookEvent(replied('que_1'))).toBe(true);
+    ctx.advance(LIVE_HOLD_MS + 8_000);
+    const a = statusAfterPoll(ctx)!;
+    expect(a.status).toBe('working'); // turno ainda aberto no banco
+    expect(a.waitingFor).toBeUndefined();
+    expect(a.activity?.questions).toBeUndefined();
+    expect(a.activity?.text).not.toBe(describeTool('AskUserQuestion', { questions: [] }).text);
+    expect(a.activity?.text).toBe('Recebeu a sua resposta');
+    ctx.advance(60_000);
+    const b = statusAfterPoll(ctx)!;
+    expect(b.status).toBe('working');
+    expect(b.activity?.questions).toBeUndefined();
+  });
+
   it('OQ-05: question.rejected tira de waiting e limpa a atividade ask', async () => {
     const ctx = await workingSession();
     ctx.source.applyHookEvent(asked());
