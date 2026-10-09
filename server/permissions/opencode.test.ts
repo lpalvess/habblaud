@@ -186,3 +186,84 @@ describe('POST /api/permissions com provider "opencode" (rotas de verdade)', () 
     expect((await request(srv.base, '/api/permissions', { method: 'POST', body: body() })).json).toEqual({ skip: 'no-viewers' });
   });
 });
+
+const QUESTIONS = [
+  { question: 'Qual banco usar?', header: 'Banco', multiSelect: false, options: [{ label: 'Postgres', description: 'Já usado' }, { label: 'SQLite' }] },
+  { question: 'Quais testes rodar?', header: 'Testes', multiSelect: true, options: [{ label: 'Unidade' }, { label: 'E2E' }] },
+];
+const ask = (over: Record<string, unknown> = {}) => body({ tool_name: 'AskUserQuestion', tool_input: { questions: QUESTIONS }, ...over });
+
+describe('perguntas do OpenCode no registro de permissões (OQ-10, OQ-11, OQ-16)', () => {
+  it('OQ-10: pergunta de sessão conhecida registra, devolve {id, expiresAt} e o cartão leva as perguntas', () => {
+    const { office, registry } = setup();
+    const r = registry.register(ask());
+    expect(r).toMatchObject({ id: expect.stringMatching(/^p-/), expiresAt: expect.any(Number) });
+    const a = office.commit().snapshot.agents.find((x) => x.id === OC_MAIN)!;
+    expect(a).toMatchObject({ status: 'waiting', waitingFor: 'responder uma pergunta' });
+    expect(a.permission).toMatchObject({ id: idOf(r), tool: 'AskUserQuestion', provider: 'opencode', icon: '❓' });
+    expect(a.permission!.questions!.map((q) => q.index)).toEqual([0, 1]);
+    expect(a.permission!.questions![1]).toMatchObject({ multiSelect: true, options: [{ index: 0, label: 'Unidade' }, { index: 1, label: 'E2E' }] });
+  });
+
+  it('OQ-11: sem página aberta ou sessão desconhecida: skip; pergunta que não cabe inteira (mais de 4): skip', () => {
+    const { registry, setViewers } = setup({ viewers: 0 });
+    expect(registry.register(ask())).toEqual({ skip: 'no-viewers' });
+    setViewers(1);
+    expect(registry.register(ask({ session_id: ocId('ses', 77) }))).toEqual({ skip: 'unknown-session' });
+    const five = Array.from({ length: 5 }, (_, i) => ({ question: `P${i}`, options: [{ label: 'a' }] }));
+    expect(registry.register(ask({ tool_input: { questions: five } }))).toEqual({ skip: 'unsupported-tool' });
+    expect(registry.size).toBe(0);
+  });
+
+  it('OQ-10: answer resolve com as respostas validadas (posições do original); contagem errada ou opção inexistente: inválida', async () => {
+    const { registry } = setup();
+    const id = idOf(registry.register(ask()));
+    expect(registry.decide(id, { behavior: 'answer', answers: [{ question: 0, options: [1] }] })).toBe('invalid-answer');
+    expect(registry.decide(id, { behavior: 'answer', answers: [{ question: 0, options: [9] }, { question: 1, options: [0] }] })).toBe('invalid-answer');
+    expect(registry.decide(id, { behavior: 'allow' })).toBe('invalid-answer');
+    expect(registry.size).toBe(1);
+    expect(registry.decide(id, { behavior: 'answer', answers: [{ question: 1, options: [1, 0], other: ' lint ' }, { question: 0, options: [1] }] })).toBe('ok');
+    expect(await result(registry, id)).toEqual({
+      status: 'decided',
+      behavior: 'answer',
+      answers: [
+        { question: 0, options: [1] },
+        { question: 1, options: [0, 1], other: 'lint' },
+      ],
+    });
+  });
+
+  it('deny e terminal valem para a pergunta; interromper segue recusado', async () => {
+    const { registry } = setup();
+    const a = idOf(registry.register(ask()));
+    expect(registry.decide(a, { behavior: 'deny', interrupt: true })).toBe('unsupported');
+    expect(registry.decide(a, { behavior: 'deny' })).toBe('ok');
+    expect(await result(registry, a)).toEqual({ status: 'decided', behavior: 'deny' });
+    const b = idOf(registry.register(ask()));
+    expect(registry.decide(b, { behavior: 'terminal' })).toBe('ok');
+    expect(await result(registry, b)).toEqual({ status: 'released', reason: 'terminal' });
+  });
+
+  it('OQ-16: releaseOpencodeQuestions libera só as perguntas pendentes daquela sessão', async () => {
+    const { office, registry } = setup();
+    const q1 = idOf(registry.register(ask()));
+    const q2 = idOf(registry.register(ask()));
+    const other = idOf(registry.register(ask({ session_id: SUBSES })));
+    const perm = idOf(registry.register(body()));
+    expect(registry.releaseOpencodeQuestions(SES)).toBe(2);
+    expect(await result(registry, q1)).toEqual({ status: 'released', reason: 'answered' });
+    expect(await result(registry, q2)).toEqual({ status: 'released', reason: 'answered' });
+    expect(registry.size).toBe(2);
+    expect(registry.decide(other, { behavior: 'terminal' })).toBe('ok');
+    expect(registry.decide(perm, { behavior: 'allow' })).toBe('ok');
+    expect(registry.releaseOpencodeQuestions(SES)).toBe(0);
+    expect(office.commit().snapshot.agents.find((x) => x.id === OC_MAIN)?.permission).toBeUndefined();
+  });
+
+  it('opencodeToolView: AskUserQuestion devolve título, texto e as perguntas mascaradas; entrada hostil não quebra', () => {
+    const v = opencodeToolView('AskUserQuestion', { questions: [{ question: 'Use Authorization: Bearer abcdef123456?', options: [{ label: 'Sim' }] }] });
+    expect(v).toMatchObject({ icon: '❓', questions: [{ index: 0, options: [{ index: 0, label: 'Sim' }] }] });
+    expect(JSON.stringify(v)).not.toContain('abcdef123456');
+    for (const input of [{}, { questions: 'x' }, { questions: [1, null] }]) expect(() => opencodeToolView('AskUserQuestion', input as Record<string, unknown>)).not.toThrow();
+  });
+});

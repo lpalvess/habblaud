@@ -158,9 +158,9 @@ function isIndex(v: unknown): v is number {
   return typeof v === 'number' && Number.isInteger(v) && v >= 0;
 }
 
-/** Pedido que se responde com `answer` (as perguntas do AskUserQuestion; o Codex não as manda pelo hook). */
+/** Pedido que se responde com `answer` (as perguntas do AskUserQuestion; o Codex não as manda pelo hook; o plugin do OpenCode manda as dele assim). */
 function isQuestion(info: { tool: string; provider?: string }): boolean {
-  return info.tool === ASK_TOOL && info.provider !== 'codex' && info.provider !== 'opencode';
+  return info.tool === ASK_TOOL && info.provider !== 'codex';
 }
 
 /** O Codex e o OpenCode não aceitam interromper nem "sempre permitir" (só aprovar ou recusar com motivo). */
@@ -537,6 +537,20 @@ export class PermissionRegistry {
     const act: Activity = { id: `${p.agentId}#perm-answer:${p.info.id}`, at: this.now(), kind: 'other', icon: '💬', text: 'Respondido no Habblaud', detail: answerSummary(questions, answers), tool: 'PermissionRequest' };
     this.opts.office.addActivity(p.agentId, act, false);
     return 'ok';
+  }
+
+  /**
+   * O OpenCode recebeu a resposta (no terminal ou pelo escritório): libera as perguntas dele ainda abertas daquela
+   * sessão, e só elas, para o cartão sumir. Devolve quantas liberou.
+   */
+  releaseOpencodeQuestions(sessionId: string): number {
+    let n = 0;
+    for (const p of [...this.pending.values()]) {
+      if (p.outcome || p.sessionId !== sessionId || p.info.provider !== 'opencode' || !isQuestion(p.info)) continue;
+      this.release(p, 'answered');
+      n++;
+    }
+    return n;
   }
 
   /** Relógio: expiração, órfãos, agente que saiu, resposta no terminal e limpeza das decisões entregues. */

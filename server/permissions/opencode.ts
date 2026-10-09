@@ -8,7 +8,8 @@
 //   (edições). O resto é ignorado.
 // Tudo mascarado (maskSecrets) e cortado como no terminal.
 import { describeTool, maskSecrets, truncate } from '../../shared/activity';
-import type { TerminalInputKind } from '../../shared/types';
+import { ASK_TOOL } from '../../shared/answers';
+import type { AskQuestion, TerminalInputKind } from '../../shared/types';
 import { describeOpencodeTool } from '../sources/opencode/activity';
 import { TITLE_ARG_MAX, toolView } from '../sources/terminal';
 
@@ -19,6 +20,8 @@ export interface OpencodeToolView {
   icon: string;
   input?: string;
   inputKind?: TerminalInputKind;
+  /** Só nas perguntas (AskUserQuestion): as perguntas para o cartão, como no Claude Code. */
+  questions?: AskQuestion[];
 }
 
 type Rec = Record<string, unknown>;
@@ -53,6 +56,11 @@ export function opencodeToolView(tool: string, input: Rec, cwd?: string): Openco
   const meta = rec(input.metadata);
   const first = patterns[0] ?? str(input.title);
   const name = tool.toLowerCase();
+  if (tool === ASK_TOOL) {
+    // A pergunta do OpenCode (tool question), repassada pelo plugin no formato do AskUserQuestion do Claude Code.
+    const desc = describeTool(ASK_TOOL, input);
+    return { title: toolView(ASK_TOOL, input, cwd).title, text: desc.text, icon: desc.icon, ...('questions' in desc && desc.questions ? { questions: desc.questions } : {}) };
+  }
   switch (name) {
     case 'bash': {
       const command = str(meta?.command) ?? (patterns.length ? patterns.join('\n') : undefined);
