@@ -40,7 +40,7 @@ async function record(handler?: (res: http.ServerResponse) => void): Promise<Rec
     let raw = '';
     req.on('data', (c) => (raw += c));
     req.on('end', () => {
-      bodies.push({ method: req.method, url: req.url, body: JSON.parse(raw) });
+      if (req.url === '/api/opencode/events') bodies.push({ method: req.method, url: req.url, body: JSON.parse(raw) }); // o registro do pedido de permissão (T16) é testado em opencode-plugin-approval.test.ts
       if (handler) return handler(res);
       res.writeHead(200, { 'Content-Type': 'application/json' }).end('{"ok":true}');
     });
