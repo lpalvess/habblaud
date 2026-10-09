@@ -15,3 +15,6 @@ export interface OpencodeLive {
    */
   applyHookEvent(event: OpencodeEvent): boolean;
 }
+
+/** Id de sessão do OpenCode: `ses_` + 26 caracteres (OC-18). */
+export const SESSION_ID_RE = /^ses_[A-Za-z0-9]{26}$/;

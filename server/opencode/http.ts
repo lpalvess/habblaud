@@ -8,7 +8,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { HttpError, readJson, sendJson } from '../http/app';
 import { errMsg, log } from '../log';
-import type { OpencodeEvent, OpencodeLive } from '../sources/opencode/live';
+import { SESSION_ID_RE, type OpencodeEvent, type OpencodeLive } from '../sources/opencode/live';
 
 type Rec = Record<string, unknown>;
 
@@ -22,9 +22,6 @@ export const OPENCODE_EVENT_TYPES: ReadonlySet<string> = new Set([
   'tool.execute.before',
   'tool.execute.after',
 ]);
-
-/** Id de sessão do OpenCode: `ses_` + 26 caracteres (OC-18). */
-export const SESSION_ID_RE = /^ses_[A-Za-z0-9]{26}$/;
 
 const rec = (v: unknown): Rec | undefined => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Rec) : undefined);
 
