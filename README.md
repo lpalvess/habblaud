@@ -534,6 +534,14 @@ permissão real foi aprovado e recusado pelo escritório. "Sempre permitir" e in
   (`npm run opencode:install -- --espera <s>`, de 5 a 120): **Aprovar** ou **Recusar** (com o motivo, que o OpenCode
   mostra ao modelo). O pedido já está na tela do OpenCode desde o começo: se você não responder no escritório, ou não
   houver página aberta, nada muda e vale a resposta do OpenCode. Não há "sempre permitir" nem "interromper".
+- **Perguntas:** quando o OpenCode faz uma pergunta (a ferramenta `question`), o agente fica esperando e o cartão
+  **Precisa de você** mostra a pergunta com as opções, mesmo sem o plugin (nesse caso, na próxima leitura do banco).
+  Responder ou recusar pelo escritório (uma opção, várias ou texto livre; **Recusar…** recusa a pergunta, e o cartão do OpenCode pede um motivo para isso) precisa
+  do plugin, e do OpenCode reiniciado depois do `npm run opencode:install`. O plugin espera a sua resposta por até
+  **10 minutos** (o `--espera` não muda isso); a pergunta continua na tela do OpenCode: se ninguém responder aqui, ou
+  você escolher **Responder no terminal**, vale o prompt do OpenCode, e responder lá faz o cartão sumir. Perguntas com
+  mais de 4 itens só se respondem no terminal. Coberto por testes automáticos; a conferência com o OpenCode de verdade
+  é feita à parte.
 - **Mandar mensagens:** a caixa **Mandar mensagem** funciona para o agente principal de uma sessão que o plugin está
   atendendo. O plugin pergunta ao Habblaud pelas mensagens da própria sessão a cada ~1,5 segundo, entrega cada uma ao
   OpenCode e confirma; o limite de texto é o mesmo das outras. Sem o plugin conectado a caixa mostra a dica de

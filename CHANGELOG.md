@@ -24,6 +24,12 @@ do meio (0.**3**.0).
   `~/.config/opencode/plugins/habblaud.js` (backup antes; `--dry-run` só mostra o plano). Com ele, o status chega ao
   vivo, os pedidos de permissão do OpenCode podem ser aprovados ou recusados no cartão **Pede permissão** (sem "sempre
   permitir") e a caixa **Mandar mensagem** entrega texto ao agente principal da sessão.
+- **Perguntas do OpenCode no escritório.** Quando o OpenCode faz uma pergunta (a ferramenta `question`), o agente fica
+  esperando e o cartão **Precisa de você** mostra o texto e as opções, com o plugin (na hora) ou sem ele (na próxima
+  leitura do banco; só a pergunta e as opções da ferramenta `question` são lidas). Com o plugin, dá para responder
+  (uma opção, várias ou texto livre) ou recusar pelo escritório, esperando até 10 minutos; sem resposta aqui, vale o
+  prompt do OpenCode, e responder lá também faz o cartão sumir. Reinicie o OpenCode depois de atualizar o plugin
+  (`npm run opencode:install`). Coberto por testes automáticos.
 
 ## [0.8.0] - 2026-10-09
 

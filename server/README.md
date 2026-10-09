@@ -377,6 +377,16 @@ Terceira fonte, ao lado das do Claude Code e do Codex (`sources/opencode/`); age
   `session_id`; só `allow` e `deny` (`interrupt` ou `suggestion` = 400). O plugin espera até `permissionTimeoutS` de
   `~/.habblaud/opencode-hook.json` (padrão 25 s) e responde ao OpenCode `once` ou `reject` (+ o motivo), nunca
   `always`; tempo esgotado ou sem página aberta não faz nada (o pedido já está na tela do OpenCode).
+- **Perguntas** (`question.asked/replied/rejected`): `POST /api/opencode/events` as aceita e a fonte mostra o agente
+  `waiting` com uma atividade `ask` (até 4 perguntas e 6 opções, segredos mascarados), até `replied`, `rejected`,
+  `session.idle` ou 30 min; sem o plugin, `files.ts` lê só `$.state.input.questions` da última parte `question` em
+  `running`. Para responder pelo escritório o plugin registra em `POST /api/permissions` com `provider: 'opencode'`,
+  `tool_name: 'AskUserQuestion'` e `tool_input.questions` (`question`, `header`, `options`, `multiSelect`), espera até
+  600 s numa tarefa própria e, com `answer`, chama `POST /question/{id}/reply` do OpenCode com `{answers: string[][]}`
+  (os rótulos das opções escolhidas, mais o texto livre como digitado); com `deny`, `POST /question/{id}/reject` sem
+  corpo; `terminal`, tempo esgotado ou 404 não fazem nada. `question.replied/rejected` chamam
+  `PermissionRegistry.releaseOpencodeQuestions(sessionId)` e o cartão some. O id da pergunta segue
+  `^[A-Za-z0-9_-]{1,64}$` antes de ir para a URL.
 - **Mensagens** (`messages/registry.ts`, `messages/http.ts`): só para agentes principais, com os mesmos limites do
   Codex (20.000 caracteres, 5 em aberto). O plugin busca em `POST /api/opencode/bridge/poll` (`{session}`; só as
   mensagens do agente daquela sessão) e confirma em `/api/opencode/bridge/ack` (`{session, results}`), com a mesma
