@@ -319,6 +319,78 @@ describe('plugin do OpenCode: perguntas respondidas pelo escritório', () => {
     expect(hits[1]).toEqual({ url: '/question/que_dois/reject', body: '' });
   });
 
+  /** Servidor do OpenCode falso que sempre responde 404 QuestionNotFoundError e conta os pedidos. */
+  async function opencode404() {
+    const hits: string[] = [];
+    const oc = http.createServer((req, res) => {
+      req.resume();
+      req.on('end', () => {
+        hits.push(`${req.method} ${req.url}`);
+        res.writeHead(404, { 'Content-Type': 'application/json' }).end(JSON.stringify({ _tag: 'QuestionNotFoundError' }));
+      });
+    });
+    await new Promise<void>((ok) => oc.listen(0, '127.0.0.1', ok));
+    closers.push(async () => {
+      oc.closeAllConnections();
+      await new Promise<void>((ok) => oc.close(() => ok()));
+    });
+    return { hits, baseUrl: `http://127.0.0.1:${(oc.address() as AddressInfo).port}` };
+  }
+
+  it('OQ-15: 404 do _client.post não cai na URL base (nenhum pedido a mais) e os eventos seguintes fluem', async () => {
+    const oc = await opencode404();
+    const s = await serve();
+    const { client, calls } = fakeClient(() => ({ error: { _tag: 'QuestionNotFoundError' }, response: { status: 404 } }), { getConfig: () => ({ baseUrl: oc.baseUrl }) });
+    const hooks = await start(client);
+    await hooks.event({ event: asked() });
+    await decide(s, await pendingId(s), { behavior: 'answer', answers: [{ question: 0, options: [0] }, { question: 1, options: [1] }, { question: 2, options: [0] }] });
+    await waitFor(() => calls.length === 1);
+    await hooks.event({ event: asked({ id: 'que_dois' }) });
+    await decide(s, await pendingId(s), { behavior: 'deny' });
+    await waitFor(() => calls.length === 2);
+    await settle();
+    expect(calls).toHaveLength(2);
+    expect(oc.hits).toEqual([]); // 404 é definitivo: sem segunda tentativa
+    await hooks.event({ event: asked({ id: 'que_tres' }) });
+    await pendingId(s); // o plugin segue vivo
+  });
+
+  it('OQ-15: _client.post que rejeita tenta a URL base uma vez por rota; o 404 de lá é ignorado, sem repetir', async () => {
+    const oc = await opencode404();
+    const s = await serve();
+    const { client, calls } = fakeClient(() => {
+      throw new Error('404 não encontrado');
+    }, { getConfig: () => ({ baseUrl: oc.baseUrl }) });
+    const hooks = await start(client);
+    await hooks.event({ event: asked() });
+    await decide(s, await pendingId(s), { behavior: 'answer', answers: [{ question: 0, options: [0] }, { question: 1, options: [1] }, { question: 2, options: [0] }] });
+    await waitFor(() => oc.hits.length === 1);
+    await hooks.event({ event: asked({ id: 'que_dois' }) });
+    await decide(s, await pendingId(s), { behavior: 'deny' });
+    await waitFor(() => oc.hits.length === 2);
+    await settle();
+    expect(calls).toHaveLength(2);
+    expect(oc.hits).toEqual([`POST /question/${QID}/reply`, 'POST /question/que_dois/reject']);
+    await hooks.event({ event: asked({ id: 'que_tres' }) });
+    await pendingId(s);
+  });
+
+  it('OQ-15: 404 na URL base (sem _client.post) é ignorado: um pedido por rota, sem repetir, e os eventos seguintes fluem', async () => {
+    const oc = await opencode404();
+    const s = await serve();
+    const hooks = await start({ _client: { getConfig: () => ({ baseUrl: oc.baseUrl }) } });
+    await hooks.event({ event: asked() });
+    await decide(s, await pendingId(s), { behavior: 'answer', answers: [{ question: 0, options: [0] }, { question: 1, options: [1] }, { question: 2, options: [0] }] });
+    await waitFor(() => oc.hits.length === 1);
+    await hooks.event({ event: asked({ id: 'que_dois' }) });
+    await decide(s, await pendingId(s), { behavior: 'deny' });
+    await waitFor(() => oc.hits.length === 2);
+    await settle(400);
+    expect(oc.hits).toEqual([`POST /question/${QID}/reply`, 'POST /question/que_dois/reject']);
+    await hooks.event({ event: asked({ id: 'que_tres' }) });
+    await pendingId(s);
+  });
+
   it('o cliente que lança não derruba o plugin; Habblaud fora do ar não faz nada', async () => {
     const s = await serve();
     const { client, calls } = fakeClient(() => {
