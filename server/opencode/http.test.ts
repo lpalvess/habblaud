@@ -62,10 +62,11 @@ describe('handleOpencodeEvent', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('só os 7 tipos permitidos passam; qualquer outro: 400', async () => {
+  it('só os 7 tipos originais passam, mais os 3 de pergunta (OQ-02); qualquer outro: 400', async () => {
     const calls: OpencodeEvent[] = [];
     const base = await serve({ applyHookEvent: (e) => (calls.push(e), true) });
-    const allowed = ['session.status', 'session.idle', 'todo.updated', 'permission.asked', 'permission.updated', 'tool.execute.before', 'tool.execute.after'];
+    // SPEC_DEVIATION: a lista ganhou os 3 tipos de pergunta (OQ-02); o teste só soma esses 3 à lista de antes.
+    const allowed = ['session.status', 'session.idle', 'todo.updated', 'permission.asked', 'permission.updated', 'tool.execute.before', 'tool.execute.after', 'question.asked', 'question.replied', 'question.rejected'];
     expect([...OPENCODE_EVENT_TYPES].sort()).toEqual([...allowed].sort());
     for (const type of allowed) expect(await request(base, '/x', { method: 'POST', body: ev(type) }), type).toMatchObject({ status: 200, json: { ok: true } });
     expect(calls.map((c) => c.type)).toEqual(allowed);
@@ -73,6 +74,20 @@ describe('handleOpencodeEvent', () => {
       expect((await request(base, '/x', { method: 'POST', body: ev(type) })).status, type).toBe(400);
     }
     expect(calls).toHaveLength(allowed.length);
+  });
+
+  it('OQ-02: question.asked/replied/rejected devolvem {ok}, com requestID e sem id; sessionID inválido ou tipo parecido: 400', async () => {
+    const calls: OpencodeEvent[] = [];
+    const base = await serve({ applyHookEvent: (e) => (calls.push(e), true) });
+    const asked = ev('question.asked', { id: 'que_1', questions: [{ question: 'Q?', header: 'H', options: [{ label: 'a', description: 'b' }] }] });
+    expect(await request(base, '/x', { method: 'POST', body: asked })).toMatchObject({ status: 200, json: { ok: true } });
+    expect(await request(base, '/x', { method: 'POST', body: ev('question.replied', { requestID: 'que_1', answers: [['a']] }) })).toMatchObject({ status: 200, json: { ok: true } });
+    expect(await request(base, '/x', { method: 'POST', body: ev('question.rejected', { requestID: 'que_1' }) })).toMatchObject({ status: 200, json: { ok: true } });
+    expect(calls.map((c) => c.type)).toEqual(['question.asked', 'question.replied', 'question.rejected']);
+    expect(calls[1].properties).toMatchObject({ requestID: 'que_1', answers: [['a']] });
+    expect((await request(base, '/x', { method: 'POST', body: { event: { type: 'question.replied', properties: { sessionID: 'ruim', requestID: 'x' } } } })).status).toBe(400);
+    expect((await request(base, '/x', { method: 'POST', body: ev('question.answered') })).status).toBe(400);
+    expect(calls).toHaveLength(3);
   });
 
   it('OC-22: o mesmo evento duas vezes chega igual duas vezes à fonte (que é idempotente) e a resposta é a mesma', async () => {

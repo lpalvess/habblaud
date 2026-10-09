@@ -21,6 +21,9 @@ export const OPENCODE_EVENT_TYPES: ReadonlySet<string> = new Set([
   'permission.updated',
   'tool.execute.before',
   'tool.execute.after',
+  'question.asked',
+  'question.replied',
+  'question.rejected',
 ]);
 
 const rec = (v: unknown): Rec | undefined => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Rec) : undefined);
