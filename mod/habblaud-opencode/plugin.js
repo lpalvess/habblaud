@@ -9,7 +9,9 @@
 // Porta e espera ficam em ~/.habblaud/opencode-hook.json ({port, permissionTimeoutS}, gravado pelo instalador);
 // HABBLAUD_PORT vale como reserva (padrão 4747). O plugin:
 // 1. manda para POST http://127.0.0.1:<porta>/api/opencode/events (prazo de 1,5 s, em fila para manter a ordem) só
-//    os eventos session.status, session.idle, todo.updated, permission.asked, permission.updated e as ferramentas
+//    os eventos session.status, session.idle, todo.updated, permission.asked, permission.updated, question.asked,
+//    question.replied, question.rejected (perguntas da ferramenta `question`; `trim` mantém id, requestID, answers e as
+//    questions com question, header, options, multiple e custom) e as ferramentas
 //    (tool.execute.before/after, com o nome e um título curto, nunca o resultado);
 // 2. nunca lança nem atrasa o OpenCode: todo erro é engolido e os envios não são esperados pelo OpenCode;
 // 3. nos pedidos de permissão (permission.asked, ou permission.updated nas versões 1.x antigas): registra o pedido em
@@ -38,7 +40,7 @@ const MIN_WAIT_S = 5;
 const MAX_WAIT_S = 120;
 const CONFIG_FILE = 'opencode-hook.json';
 /** Eventos mandados ao Habblaud (o que o servidor aceita em /api/opencode/events). */
-const OBSERVED = new Set(['session.status', 'session.idle', 'todo.updated', 'permission.asked', 'permission.updated']);
+const OBSERVED = new Set(['session.status', 'session.idle', 'todo.updated', 'permission.asked', 'permission.updated', 'question.asked', 'question.replied', 'question.rejected']);
 /** Prazo do envio de um evento: o Habblaud responde na hora (e o plugin não pode atrasar o OpenCode). */
 const EVENT_TIMEOUT_MS = 1_500;
 /** Registrar o pedido: se o Habblaud não responder nisso, ele está fora do ar (ou travado). */
