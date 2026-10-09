@@ -40,7 +40,7 @@ export function parseOpencodeEvent(raw: unknown): OpencodeEvent {
 }
 
 /** Trata POST /api/opencode/events (método e Host já conferidos). `ok` = a fonte do OpenCode aproveitou o evento. */
-export async function handleOpencodeEvent(req: IncomingMessage, res: ServerResponse, deps: { live?: OpencodeLive }): Promise<void> {
+export async function handleOpencodeEvent(req: IncomingMessage, res: ServerResponse, deps: { live?: OpencodeLive; releaseQuestions?: (sessionId: string) => void }): Promise<void> {
   const event = parseOpencodeEvent(await readJson(req));
   let ok = false;
   if (deps.live) {
@@ -48,6 +48,14 @@ export async function handleOpencodeEvent(req: IncomingMessage, res: ServerRespo
       ok = deps.live.applyHookEvent(event) === true;
     } catch (err) {
       log.warnOnce(`opencode-event:${errMsg(err)}`, `Eventos do OpenCode: falha ao aplicar um evento (${errMsg(err)}).`);
+    }
+  }
+  // A pergunta foi respondida (ou recusada) no OpenCode: o cartão que o escritório tinha dela some (OQ-16).
+  if (deps.releaseQuestions && (event.type === 'question.replied' || event.type === 'question.rejected')) {
+    try {
+      deps.releaseQuestions(String(event.properties.sessionID));
+    } catch (err) {
+      log.warnOnce(`opencode-question-release:${errMsg(err)}`, `Eventos do OpenCode: falha ao liberar as perguntas da sessão (${errMsg(err)}).`);
     }
   }
   sendJson(res, 200, { ok });

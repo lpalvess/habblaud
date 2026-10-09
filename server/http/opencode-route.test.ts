@@ -119,3 +119,13 @@ describe('POST /api/opencode/events', () => {
     expect((await request(base, '/api/health')).json).not.toHaveProperty('opencodeEvents');
   });
 });
+
+describe('OQ-16: a rota liga o liberador de perguntas', () => {
+  it('question.replied e question.rejected chamam o liberador com a sessão; outros eventos não', async () => {
+    const released: string[] = [];
+    const base = await serve({ opencodeEvents: true, releaseOpencodeQuestions: (s) => void released.push(s) });
+    const ev = (type: string) => ({ event: { type, properties: { sessionID: SES, requestID: 'que_1' } } });
+    for (const type of ['session.idle', 'question.asked', 'question.replied', 'question.rejected']) await request(base, '/api/opencode/events', { method: 'POST', body: ev(type) });
+    expect(released).toEqual([SES, SES]);
+  });
+});

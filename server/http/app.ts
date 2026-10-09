@@ -58,6 +58,8 @@ export interface ApiDeps {
    */
   opencodeEvents?: boolean;
   opencodeLive?: OpencodeLive;
+  /** Libera as perguntas do OpenCode ainda abertas no escritório (cartão) de uma sessão: chamada em question.replied/rejected. */
+  releaseOpencodeQuestions?: (sessionId: string) => void;
   /** Renomeia a sala (POST /api/rooms/rename {id, name}; vazio volta ao padrão). Devolve o nome em uso, ou undefined se a sala não existe. */
   renameRoom?: (id: string, name: string) => string | undefined;
   /** Estatísticas do "Meu dia" (GET /api/stats, http/stats.ts). */
@@ -358,7 +360,7 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
       if (method !== 'POST') methodNotAllowed(res, 'POST');
       else if (!isLoopbackHost(req.headers.host) || (!deps.inDocker && !isLoopbackAddress(req.socket.remoteAddress))) {
         sendJson(res, 403, { error: 'eventos do OpenCode só são aceitos pelo próprio computador (http://localhost ou http://127.0.0.1)' });
-      } else handleOpencodeEvent(req, res, { live: deps.opencodeLive }).catch((err) => fail(res, err));
+      } else handleOpencodeEvent(req, res, { live: deps.opencodeLive, releaseQuestions: deps.releaseOpencodeQuestions }).catch((err) => fail(res, err));
       return true;
     }
     if (isMessagesPath(path)) {
