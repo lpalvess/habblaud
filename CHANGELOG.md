@@ -17,7 +17,9 @@ do meio (0.**3**.0).
   lê o banco do OpenCode (`opencode.db`) só para leitura, e apenas as tabelas `project`, `session`, `message`, `part` e
   `todo`; isso pede o Node 22.13 ou mais novo (no Node 22.12 a leitura fica desligada e o resto segue).
   `HABBLAUD_OPENCODE=0` desliga e `HABBLAUD_OPENCODE_DIR` escolhe a pasta de dados. Implementado e coberto por testes
-  automáticos; ainda não conferido num OpenCode instalado de verdade.
+  automáticos, e conferido de ponta a ponta no OpenCode 1.18.35, no Linux, com uma pasta pessoal temporária e isolada
+  (sessão, eventos ao vivo, entrega de mensagem e um pedido de permissão real aprovado e recusado); "sempre permitir" e
+  interromper não são oferecidos, de propósito.
 - **Plugin do OpenCode** (`npm run opencode:install`, `opencode:status` e `opencode:uninstall`): copia um plugin para
   `~/.config/opencode/plugins/habblaud.js` (backup antes; `--dry-run` só mostra o plano). Com ele, o status chega ao
   vivo, os pedidos de permissão do OpenCode podem ser aprovados ou recusados no cartão **Pede permissão** (sem "sempre

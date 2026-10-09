@@ -500,7 +500,9 @@ chip da conta do Codex é vazado e leva o selo **CODEX**.
 
 As sessões do OpenCode aparecem como as do Claude Code e do Codex: personagem, sala do projeto (a pasta da sessão),
 atividade, tarefas e subagentes. O chip da conta é fixo ("OpenCode") e leva o selo **OpenCode**. Esta parte está
-implementada e coberta por testes automáticos; ainda não foi conferida num OpenCode instalado de verdade.
+implementada e coberta por testes automáticos, e foi conferida de ponta a ponta no OpenCode 1.18.35, no Linux, com uma
+pasta pessoal temporária e isolada: a sessão aparece, os eventos chegam ao vivo, a mensagem é entregue e um pedido de
+permissão real foi aprovado e recusado pelo escritório. "Sempre permitir" e interromper não são oferecidos, de propósito.
 
 - **Sem instalar nada**, o Habblaud lê o banco do OpenCode a cada segundo, só para leitura. Uma sessão aparece enquanto
   foi mexida nos últimos 30 minutos e não está arquivada; uma sessão filha (`parent_id`) vira subagente da principal.
@@ -509,6 +511,7 @@ implementada e coberta por testes automáticos; ainda não foi conferida num Ope
   simplesmente não liga. O banco não é montado no Docker, então essa leitura só funciona com o Habblaud no modo Node.
 - **Com o plugin** (`npm run opencode:install` e reabrir o OpenCode), o OpenCode avisa o Habblaud na hora do que
   acontece (status, tarefas, ferramentas, pedidos de permissão), sem esperar a próxima leitura do banco.
+  O plugin é carregado quando o OpenCode inicia, então é preciso reiniciar o OpenCode depois de `npm run opencode:install`.
 - **Aprovar pelo escritório:** com alguma página do Habblaud aberta, o pedido de permissão do OpenCode aparece no cartão
   **Pede permissão** (com o selo OpenCode) e espera a sua resposta por até **25 segundos**
   (`npm run opencode:install -- --espera <s>`, de 5 a 120): **Aprovar** ou **Recusar** (com o motivo, que o OpenCode
