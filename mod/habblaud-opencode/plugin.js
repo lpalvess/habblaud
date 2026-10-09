@@ -29,7 +29,7 @@
 // acontece no stderr.
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 const DEFAULT_PORT = 4747;
 /** Espera padrão por uma decisão no escritório (segundos), e os limites do arquivo de configuração. */
@@ -271,6 +271,12 @@ async function deliver(client, sessionID, text) {
   }
 }
 
+/** Mesmo diretório depois de normalizar o caminho (barras no fim, `..`, `.`). Falso se algum lado estiver vazio. */
+function sameDir(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || !a.trim() || !b.trim()) return false;
+  return resolve(a) === resolve(b);
+}
+
 export const HabblaudPlugin = async ({ client, directory } = {}) => {
   const seen = new Set();
   let queue = Promise.resolve();
@@ -326,7 +332,16 @@ export const HabblaudPlugin = async ({ client, directory } = {}) => {
         nextListAt = Date.now() + LIST_EVERY_MS;
         const r = await within(Promise.resolve().then(() => client?.session?.list?.()), LIST_TIMEOUT_MS, undefined).catch(() => undefined);
         const rows = Array.isArray(r?.data) ? r.data : Array.isArray(r) ? r : [];
-        for (const row of rows.slice(0, MAX_SESSIONS)) if (isObject(row)) own(row.id);
+        // Dono da sessão: com dois OpenCode abertos, `session.list()` pode trazer sessões do OUTRO processo, e quem busca
+        // primeiro entregaria a mensagem pelo cliente errado. Por isso só entram as sessões do próprio diretório deste
+        // plugin (as que ele viu em eventos e ferramentas entram sempre, por `own`). Sem `directory` no argumento, só as vistas.
+        // Linha sem campo `directory` (cliente que não o informa) não dá como saber o dono e segue como antes.
+        for (const row of rows.slice(0, MAX_SESSIONS)) {
+          if (!isObject(row)) continue;
+          if (typeof row.directory === 'string') {
+            if (sameDir(row.directory, directory)) own(row.id);
+          } else if (row.directory === undefined && directory) own(row.id);
+        }
       }
       for (const session of [...owned.keys()]) {
         if (stopped) return;
