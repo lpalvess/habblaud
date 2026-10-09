@@ -486,6 +486,30 @@ describe.skipIf(!HAS_SQLITE)('fonte do OpenCode: perguntas ao vivo (question.*)'
     expect(statusAfterPoll(ctx)?.status).toBe('working'); // sem pendência guardada: o banco (turno aberto) manda
   });
 
+  it('OQ-04: eventos ao vivo de trabalho (session.status busy, tool.execute.before) e o ciclo não tiram a espera da pergunta; replied com o mesmo requestID tira', async () => {
+    const ctx = await workingSession();
+    ctx.source.applyHookEvent(asked());
+    const still = () => {
+      const a = ctx.agent(S1)!;
+      expect(a.status).toBe('waiting');
+      expect(a.waitingFor).toBe('responder uma pergunta');
+      expect(a.activity?.kind).toBe('ask');
+      expect(a.activity?.questions).toHaveLength(2);
+    };
+    ctx.source.applyHookEvent({ type: 'session.status', properties: { sessionID: S1, status: { type: 'busy' } } });
+    still();
+    ctx.source.applyHookEvent({ type: 'tool.execute.before', properties: { sessionID: S1, tool: 'bash', callID: 'call_9', title: 'npm test' } });
+    still();
+    ctx.advance(LIVE_HOLD_MS + 5_000);
+    ctx.poll();
+    still();
+    expect(ctx.source.applyHookEvent(replied('que_1'))).toBe(true);
+    const a = ctx.agent(S1)!;
+    expect(a.status).toBe('working');
+    expect(a.waitingFor).toBeUndefined();
+    expect(a.activity?.questions).toBeUndefined();
+  });
+
   it('OQ-05: question.rejected tira de waiting e limpa a atividade ask', async () => {
     const ctx = await workingSession();
     ctx.source.applyHookEvent(asked());
