@@ -53,6 +53,16 @@ describe('FileTail', () => {
     expect(r.lines).toEqual(['novo-1', 'novo-2']);
   });
 
+  it('não trata linhas acrescentadas ao mesmo arquivo como rotação', () => {
+    writeFileSync(file, 'a\n');
+    const t = new FileTail(file);
+    t.read();
+    appendFileSync(file, 'b\nc\n');
+    const r = t.read();
+    expect(r.reset).toBe(false);
+    expect(r.lines).toEqual(['b', 'c']);
+  });
+
   it('informa arquivo inexistente sem lançar erro', () => {
     const t = new FileTail(join(tmp.dir, 'nao-existe.jsonl'));
     expect(t.read()).toMatchObject({ missing: true, lines: [] });

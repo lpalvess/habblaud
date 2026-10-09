@@ -21,6 +21,8 @@ export class FileTail {
   mtimeMs = 0;
   private partial: Buffer | null = null;
   private ino: number | undefined;
+  /** Momento de criação do arquivo (0 quando o sistema de arquivos não informa). */
+  private birthtimeMs = 0;
   private readonly maxChunk: number;
 
   constructor(
@@ -46,6 +48,7 @@ export class FileTail {
     try {
       const st = fstatSync(fd);
       this.ino = st.ino;
+      this.birthtimeMs = st.birthtimeMs;
       this.size = st.size;
       this.mtimeMs = st.mtimeMs;
       if (st.size <= maxBytes) {
@@ -78,12 +81,23 @@ export class FileTail {
     try {
       const st = statSync(this.path);
       this.ino = st.ino;
+      this.birthtimeMs = st.birthtimeMs;
       this.size = st.size;
       this.mtimeMs = st.mtimeMs;
       this.offset = st.size;
     } catch {
       this.offset = 0;
     }
+  }
+
+  /**
+   * O arquivo foi trocado por outro? O inode diferente basta, mas o sistema de arquivos pode reaproveitar o
+   * número de um arquivo apagado: por isso, quando os dois lados informam o momento de criação, ele também conta.
+   */
+  private replaced(st: { ino: number; birthtimeMs: number }): boolean {
+    if (this.ino === undefined) return false;
+    if (st.ino !== this.ino) return true;
+    return this.birthtimeMs > 0 && st.birthtimeMs > 0 && st.birthtimeMs !== this.birthtimeMs;
   }
 
   read(): TailRead {
@@ -97,12 +111,13 @@ export class FileTail {
     try {
       const st = fstatSync(fd);
       let reset = false;
-      if ((this.ino !== undefined && st.ino !== this.ino) || st.size < this.offset) {
+      if (this.replaced(st) || st.size < this.offset) {
         this.offset = 0;
         this.partial = null;
         reset = true;
       }
       this.ino = st.ino;
+      this.birthtimeMs = st.birthtimeMs;
       this.size = st.size;
       this.mtimeMs = st.mtimeMs;
       const avail = st.size - this.offset;
