@@ -223,6 +223,24 @@ Depois, **abra o Codex e aprove os hooks do Habblaud em `/hooks`**: o Codex só 
 aprova (o Habblaud nunca grava essa aprovação). Com o Habblaud no Docker, para mandar mensagens às sessões do Codex
 deixe também `npm run codex:bridge` rodando no Mac (veja [Codex](#codex)).
 
+### 5. OpenCode no escritório (opcional)
+
+Se você também usa o **OpenCode**, as sessões dele entram no mesmo escritório: cada projeto é uma sala e cada sessão,
+um personagem com o selo **OpenCode**. O Habblaud acha o banco do OpenCode (`~/.local/share/opencode/opencode.db`) e o
+lê **só para leitura**, sem instalar nada. Isso pede o **Node 22.13 ou mais novo** (é quando o `node:sqlite` passa a
+funcionar sem opção extra): no Node 22.12 essa leitura fica desligada, o Habblaud avisa com uma linha no log e o resto
+segue normal. Para ver o OpenCode **ao vivo**, aprovar pedidos de permissão e mandar mensagens pelo escritório, instale
+o plugin:
+
+```bash
+npm run opencode:install   # copia o plugin para ~/.config/opencode/plugins/habblaud.js (backup antes de trocar um arquivo)
+npm run opencode:status    # confere
+```
+
+Depois, **reabra o OpenCode**: ele carrega o plugin ao iniciar. Sem o plugin não há aprovar pelo escritório, nem mandar
+mensagem, nem o status ao vivo: só o que a leitura do banco mostra (veja [OpenCode](#opencode)). Depois de atualizar o
+Habblaud, rode `npm run opencode:install` de novo (o plugin é uma cópia; o `status` avisa quando ela ficou para trás).
+
 ### Abrir no celular (opcional)
 
 Por padrão o Habblaud só aceita conexões do próprio computador. Para abrir no celular (no mesmo Wi-Fi), com Docker:
@@ -289,6 +307,7 @@ npm run docker:up        # tira o container codetown e copia os dados do volume 
 ```bash
 npm run mod:uninstall                       # tira o mod, os plugins de permissões e de mensagens e o marketplace
 npm run codex:uninstall                     # tira os hooks do Habblaud do Codex (os outros ficam)
+npm run opencode:uninstall                  # tira o plugin do OpenCode (só os dois arquivos que o instalador gravou)
 npm run docker:down                         # para o container
 docker volume rm habblaud_habblaud-data     # apaga os dados do container (nomes, linha do tempo e estatísticas)
 docker image rm habblaud:local              # apaga a imagem
@@ -477,6 +496,32 @@ chip da conta do Codex é vazado e leva o selo **CODEX**.
   pouco para ir embora depois que você fecha o terminal.
 - Conversas da nuvem do ChatGPT (sem arquivo no computador) não aparecem. `HABBLAUD_CODEX=0` desliga o Codex.
 
+### OpenCode
+
+As sessões do OpenCode aparecem como as do Claude Code e do Codex: personagem, sala do projeto (a pasta da sessão),
+atividade, tarefas e subagentes. O chip da conta é fixo ("OpenCode") e leva o selo **OpenCode**. Esta parte está
+implementada e coberta por testes automáticos; ainda não foi conferida num OpenCode instalado de verdade.
+
+- **Sem instalar nada**, o Habblaud lê o banco do OpenCode a cada segundo, só para leitura. Uma sessão aparece enquanto
+  foi mexida nos últimos 30 minutos e não está arquivada; uma sessão filha (`parent_id`) vira subagente da principal.
+  Trabalhando ou ociosa vem da última resposta do assistente, e a atividade vem da última ferramenta usada (bash, read,
+  edit, write, grep, glob, webfetch, task). Pede o Node 22.13 ou mais novo; sem o banco, ou no Node 22.12, a leitura
+  simplesmente não liga. O banco não é montado no Docker, então essa leitura só funciona com o Habblaud no modo Node.
+- **Com o plugin** (`npm run opencode:install` e reabrir o OpenCode), o OpenCode avisa o Habblaud na hora do que
+  acontece (status, tarefas, ferramentas, pedidos de permissão), sem esperar a próxima leitura do banco.
+- **Aprovar pelo escritório:** com alguma página do Habblaud aberta, o pedido de permissão do OpenCode aparece no cartão
+  **Pede permissão** (com o selo OpenCode) e espera a sua resposta por até **25 segundos**
+  (`npm run opencode:install -- --espera <s>`, de 5 a 120): **Aprovar** ou **Recusar** (com o motivo, que o OpenCode
+  mostra ao modelo). O pedido já está na tela do OpenCode desde o começo: se você não responder no escritório, ou não
+  houver página aberta, nada muda e vale a resposta do OpenCode. Não há "sempre permitir" nem "interromper".
+- **Mandar mensagens:** a caixa **Mandar mensagem** funciona para o agente principal de uma sessão que o plugin está
+  atendendo. O plugin pergunta ao Habblaud pelas mensagens da própria sessão a cada ~1,5 segundo, entrega cada uma ao
+  OpenCode e confirma; o limite de texto é o mesmo das outras. Sem o plugin conectado a caixa mostra a dica de
+  instalação, e uma mensagem que o plugin não confirma em 20 segundos aparece como não entregue.
+- `HABBLAUD_OPENCODE=0` desliga as duas camadas; `HABBLAUD_OPENCODE_DIR` aponta a pasta de dados do OpenCode.
+- O uso (cotas) do OpenCode não existe, e o terminal e o histórico de sessões ainda não
+  cobrem o OpenCode.
+
 ### GitHub no escritório
 
 O que os agentes fazem no GitHub anima a sala do projeto, sem token e sem acessar a internet: o Habblaud lê nos
@@ -594,6 +639,8 @@ Tudo funciona sem configurar nada. Se precisar ajustar, use variáveis de ambien
 | `HABBLAUD_CODEX` | ligado | `0` desliga o Codex no escritório. |
 | `HABBLAUD_CODEX_DIRS` | detecção automática | Pastas do Codex, separadas por vírgula (no lugar de `~/.codex*` e `CODEX_HOME`). |
 | `HABBLAUD_CODEX_BIN` | `codex` do PATH | O binário do Codex que entrega as mensagens (`codex queue`), no modo Node ou no `npm run codex:bridge`. |
+| `HABBLAUD_OPENCODE` | ligado | `0` desliga o OpenCode no escritório (a leitura do banco e os eventos do plugin). |
+| `HABBLAUD_OPENCODE_DIR` | `$XDG_DATA_HOME/opencode` ou `~/.local/share/opencode` | Pasta de dados do OpenCode (onde fica o `opencode.db`). |
 | `HABBLAUD_UPDATE_CHECK` | ligado | `0` desliga a verificação de versão nova (uma consulta às releases do repositório no GitHub a cada 6 h). |
 | `HABBLAUD_ACCOUNTS` | — | JSON para personalizar nome, letra ou cor, casado pelo nome da pasta da conta. Ex.: `[{"id":".claude-conta2","name":"Trabalho","short":"T","color":"#5cc97b"}]`. |
 
@@ -658,6 +705,8 @@ mod/      o mod do Habblaud e os plugins de permissões e de mensagens (plugins 
 | `/api/messages…` e `/api/mod/inbox…` | Mandar mensagens: a página deixa a mensagem na fila e acompanha a entrega; o plugin `habblaud-mensagens` a busca, entrega à sessão e confirma. Só com acesso local. |
 | `POST /api/codex/events` | Eventos dos hooks do Codex (sessão aberta, ferramenta, aprovação, fim do turno). Só com acesso local. |
 | `/api/codex/bridge/poll` e `/ack` | O `npm run codex:bridge` busca as mensagens para o Codex e confirma a entrega. Só com acesso local. |
+| `POST /api/opencode/events` | Eventos do plugin do OpenCode (status, tarefas, ferramentas, pedidos de permissão). Só com acesso local. |
+| `/api/opencode/bridge/poll` e `/ack` | O plugin do OpenCode busca as mensagens da própria sessão, entrega e confirma. Só com acesso local. |
 
 Mais detalhes do servidor em [`server/README.md`](server/README.md).
 
@@ -738,6 +787,14 @@ das contas (letra, e-mail, organização) são lidos no host pelo `docker:up` e 
   outros apps ficam no mesmo lugar) e grava `~/.habblaud/codex-hook.json`; a aprovação dos hooks é sempre sua, em
   `/hooks`. Os hooks só falam com `127.0.0.1`. As mensagens ao Codex têm o mesmo aviso das do Claude Code: qualquer
   programa desta máquina que fale com o Habblaud consegue deixar uma mensagem na fila de uma sessão.
+- **OpenCode:** o OpenCode só guarda as sessões num banco SQLite, então este é o único caso em que o Habblaud abre um
+  SQLite, sempre em modo somente leitura e só as tabelas `project`, `session`, `message`, `part` e `todo`. Das colunas
+  de conteúdo ele pede apenas o papel, os tempos, o tipo da parte, o nome da ferramenta e o título curto dela: o texto
+  das mensagens, a saída das ferramentas e o raciocínio nunca chegam ao Habblaud. Nunca abre o `auth.json`, a
+  configuração (`opencode.jsonc`), os logs nem o resto do banco (`account`, `event`). O `npm run opencode:install` grava
+  só `~/.config/opencode/plugins/habblaud.js` e `~/.habblaud/opencode-hook.json` (com backup antes de trocar um arquivo)
+  e o plugin só fala com `127.0.0.1`. As mensagens ao OpenCode têm o mesmo aviso das outras: qualquer programa desta
+  máquina que fale com o Habblaud consegue deixar uma mensagem na fila de uma sessão que tenha o plugin.
 - **O que aparece na tela:** resumos das atividades (ferramenta, arquivo, comando ou consulta), títulos das sessões,
   tarefas e estatísticas (e, no terminal, a conversa). Não exponha a porta em redes em que você não
   confia.

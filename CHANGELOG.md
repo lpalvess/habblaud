@@ -10,6 +10,19 @@ do meio (0.**3**.0).
 
 ## [Não lançado]
 
+### Adicionado
+
+- **OpenCode no escritório.** As sessões do OpenCode entram como as do Claude Code e do Codex: cada projeto é uma sala,
+  cada sessão um personagem com o selo **OpenCode**, com atividade, subagentes e status. Sem instalar nada, o Habblaud
+  lê o banco do OpenCode (`opencode.db`) só para leitura, e apenas as tabelas `project`, `session`, `message`, `part` e
+  `todo`; isso pede o Node 22.13 ou mais novo (no Node 22.12 a leitura fica desligada e o resto segue).
+  `HABBLAUD_OPENCODE=0` desliga e `HABBLAUD_OPENCODE_DIR` escolhe a pasta de dados. Implementado e coberto por testes
+  automáticos; ainda não conferido num OpenCode instalado de verdade.
+- **Plugin do OpenCode** (`npm run opencode:install`, `opencode:status` e `opencode:uninstall`): copia um plugin para
+  `~/.config/opencode/plugins/habblaud.js` (backup antes; `--dry-run` só mostra o plano). Com ele, o status chega ao
+  vivo, os pedidos de permissão do OpenCode podem ser aprovados ou recusados no cartão **Pede permissão** (sem "sempre
+  permitir") e a caixa **Mandar mensagem** entrega texto ao agente principal da sessão.
+
 ## [0.7.0] - 2026-10-09
 
 Para atualizar: `git pull` e `npm run docker:up` (o Codex aparece sozinho, se houver uma pasta `~/.codex`). Para ver o
