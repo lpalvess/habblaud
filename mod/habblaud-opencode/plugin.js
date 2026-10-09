@@ -27,6 +27,15 @@
 //    client.session.promptAsync({path: {id}, body: {parts: [{type: 'text', text}]}}) e confirma em
 //    POST /api/opencode/bridge/ack. A busca também é o sinal de "plugin conectado" do escritório. O timer não segura o
 //    processo (unref), erros são engolidos, Habblaud fora do ar só espaça as buscas e server.instance.disposed a encerra.
+// 5. nas perguntas da ferramenta `question` (question.asked): registra em POST /api/permissions (provider "opencode",
+//    tool_name "AskUserQuestion", tool_input.questions = [{question, header, options: [{label, description}],
+//    multiSelect}], na ordem original) e espera em GET /api/permissions/:id/wait por até 600 s, numa tarefa PRÓPRIA (nem a
+//    fila de eventos nem os outros eventos esperam por ela). Respondido no escritório: POST /question/{id}/reply com
+//    {answers: string[][]} (uma lista de rótulos por pergunta, na ordem: o rótulo da opção de cada posição escolhida e,
+//    se houve, o texto livre como foi digitado); "não responder": POST /question/{id}/reject (sem corpo). Terminal, tempo
+//    esgotado, sem página aberta ou Habblaud fora do ar: não faz nada e vale o prompt do OpenCode. 404 (já respondida no
+//    terminal) é ignorado. A resposta vai por client._client.post, ou pela URL base do cliente (o cliente v1 não tem
+//    métodos de pergunta). O id da pergunta é validado antes de ir para uma URL.
 // Só fala com 127.0.0.1 (e com o servidor do próprio OpenCode, para responder). HABBLAUD_HOOK_DEBUG=1 escreve o que
 // acontece no stderr.
 import { readFileSync } from 'node:fs';
@@ -59,6 +68,11 @@ const MAX_STRING = 1_000;
 const MAX_ITEMS = 100;
 /** Campos dos argumentos de uma ferramenta que servem de título curto (o primeiro que existir). */
 const TITLE_FIELDS = ['filePath', 'file_path', 'path', 'pattern', 'command', 'url', 'query', 'description'];
+
+/** Espera por uma resposta a uma pergunta (o OpenCode não a limita; o prompt dele continua no terminal) e o formato do id. */
+const QUESTION_WAIT_MS = 600_000;
+const QUESTION_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const MAX_QUESTIONS = 20;
 
 /** Busca das mensagens do escritório: de quanto em quanto tempo, e quantas sessões no máximo (as mais recentes). */
 const POLL_MS = 1_500;
@@ -252,6 +266,118 @@ async function decide(client, perm, cwd) {
   }
 }
 
+/**
+ * A pergunta do evento question.asked: o que vai ao Habblaud (`input`: perguntas no formato do AskUserQuestion, na ordem
+ * original) e os rótulos/regras de cada pergunta para montar a resposta (`asks`). undefined se o evento não serve.
+ */
+function questionOf(event) {
+  if (!isObject(event) || event.type !== 'question.asked') return undefined;
+  const p = event.properties;
+  if (!isObject(p) || typeof p.id !== 'string' || !QUESTION_ID_RE.test(p.id) || typeof p.sessionID !== 'string' || !SESSION_ID_RE.test(p.sessionID)) return undefined;
+  if (!Array.isArray(p.questions) || !p.questions.length || !p.questions.every(isObject)) return undefined;
+  const asks = [];
+  const questions = p.questions.slice(0, MAX_QUESTIONS).map((q) => {
+    const options = (Array.isArray(q.options) ? q.options : []).slice(0, MAX_ITEMS).map((o) => (isObject(o) ? o : {}));
+    asks.push({ labels: options.map((o) => (typeof o.label === 'string' ? o.label : '')), custom: q.custom !== false });
+    return {
+      question: typeof q.question === 'string' ? q.question.slice(0, MAX_STRING) : '',
+      header: typeof q.header === 'string' ? q.header.slice(0, MAX_STRING) : '',
+      options: options.map((o) => ({ label: typeof o.label === 'string' ? o.label.slice(0, MAX_STRING) : '', description: typeof o.description === 'string' ? o.description.slice(0, MAX_STRING) : '' })),
+      multiSelect: q.multiple === true,
+    };
+  });
+  return { id: p.id, sessionID: p.sessionID, asks, tool_input: { questions } };
+}
+
+/**
+ * `answers` do OpenCode a partir da decisão `answer` do Habblaud (posições originais das perguntas e das opções): uma lista
+ * por pergunta, na ordem, com o rótulo de cada opção escolhida e o texto livre como digitado. undefined se algo não
+ * bate (então nada é respondido e vale o prompt do OpenCode).
+ */
+function answersOf(asks, decided) {
+  if (!Array.isArray(decided) || decided.length !== asks.length) return undefined;
+  const out = [];
+  for (let qi = 0; qi < asks.length; qi++) {
+    const a = decided.find((x) => isObject(x) && x.question === qi);
+    if (!a) return undefined;
+    const labels = [];
+    for (const i of Array.isArray(a.options) ? a.options : []) {
+      const label = Number.isInteger(i) ? asks[qi].labels[i] : undefined;
+      if (typeof label !== 'string' || !label) return undefined;
+      labels.push(label);
+    }
+    if (typeof a.other === 'string' && a.other && asks[qi].custom) labels.push(a.other);
+    if (!labels.length) return undefined;
+    out.push(labels);
+  }
+  return out;
+}
+
+/**
+ * Responde (reply, com `body`) ou recusa (reject, sem corpo) a pergunta no OpenCode. Primeiro pelo cliente HTTP do
+ * plugin; se não houver ou falhar, pela URL base dele. 404 (já respondida) vale como feito. Nunca lança.
+ */
+async function answerQuestion(client, id, action, body) {
+  if (typeof id !== 'string' || !QUESTION_ID_RE.test(id)) return false;
+  try {
+    const post = client?._client?.post;
+    if (typeof post === 'function') {
+      const r = await post.call(client._client, { url: `/question/{requestID}/${action}`, path: { requestID: id }, ...(body === undefined ? {} : { body, headers: { 'Content-Type': 'application/json' } }) });
+      if (!failed(r)) return true;
+      if (r?.response?.status === 404) return false;
+    }
+  } catch (err) {
+    debug(`pergunta pelo cliente: ${err?.message ?? err}`);
+  }
+  try {
+    const base = baseUrlOf(client);
+    if (!base) return false;
+    const res = await fetch(`${base}/question/${encodeURIComponent(id)}/${action}`, {
+      method: 'POST',
+      headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(5_000),
+    });
+    return res.ok;
+  } catch (err) {
+    debug(`pergunta pela URL base: ${err?.message ?? err}`);
+    return false;
+  }
+}
+
+/** Registra a pergunta no Habblaud, espera até 600 s e responde ao OpenCode (ou não faz nada). Nunca lança. */
+async function askOffice(client, q, cwd) {
+  try {
+    const { port } = readConfig();
+    const deadline = Date.now() + QUESTION_WAIT_MS;
+    const body = { provider: 'opencode', session_id: q.sessionID, tool_name: 'AskUserQuestion', tool_input: q.tool_input, timeout_ms: QUESTION_WAIT_MS };
+    if (typeof cwd === 'string' && cwd) body.cwd = cwd.slice(0, 4_096);
+    const reg = await call(port, 'POST', '/api/permissions', body, REGISTER_TIMEOUT_MS);
+    if (!reg || reg.status !== 201 || typeof reg.json?.id !== 'string') {
+      debug(`pergunta sem desvio (${reg ? `${reg.status} ${JSON.stringify(reg.json ?? null)}` : 'Habblaud fora do ar'})`);
+      return;
+    }
+    const id = encodeURIComponent(reg.json.id);
+    for (;;) {
+      const left = deadline - Date.now();
+      if (left <= 0) return debug('pergunta: tempo esgotado, vale o prompt do OpenCode');
+      const waitS = Math.max(0.05, Math.min(POLL_S, left / 1_000));
+      const r = await call(port, 'GET', `/api/permissions/${id}/wait?timeout=${waitS}`, undefined, waitS * 1_000 + 5_000);
+      if (!r || r.status !== 200) return;
+      if (r.json?.status === 'pending') continue;
+      debug(`pergunta, resposta: ${r.json?.status} ${r.json?.behavior ?? ''}`);
+      if (r.json?.status !== 'decided') return;
+      if (r.json.behavior === 'answer') {
+        const answers = answersOf(q.asks, r.json.answers);
+        if (answers) await answerQuestion(client, q.id, 'reply', { answers });
+      } else if (r.json.behavior === 'deny') await answerQuestion(client, q.id, 'reject');
+      return;
+    }
+  } catch (err) {
+    debug(`erro na pergunta: ${err?.message ?? err}`);
+  }
+}
+
 /** Resolve com o resultado de `p` ou, passado `ms`, com `fallback` (o timer não segura o processo). Rejeita se `p` rejeitar. */
 function within(p, ms, fallback) {
   let timer;
@@ -281,6 +407,7 @@ function sameDir(a, b) {
 
 export const HabblaudPlugin = async ({ client, directory } = {}) => {
   const seen = new Set();
+  const seenQuestions = new Set();
   let queue = Promise.resolve();
   let pending = 0;
   /** Põe um evento na fila de envio (em ordem, sem ninguém esperar por ele). Nunca lança. */
@@ -380,6 +507,12 @@ export const HabblaudPlugin = async ({ client, directory } = {}) => {
           seen.add(perm.id);
           if (seen.size > MAX_SEEN) seen.delete(seen.values().next().value);
           decide(client, perm, directory).catch(() => {}); // em segundo plano: o OpenCode não espera
+        }
+        const question = questionOf(input?.event);
+        if (question && !seenQuestions.has(question.id)) {
+          seenQuestions.add(question.id);
+          if (seenQuestions.size > MAX_SEEN) seenQuestions.delete(seenQuestions.values().next().value);
+          askOffice(client, question, directory).catch(() => {}); // tarefa própria: a espera de até 600 s não trava nada
         }
       } catch (err) {
         debug(`erro: ${err?.message ?? err}`);
