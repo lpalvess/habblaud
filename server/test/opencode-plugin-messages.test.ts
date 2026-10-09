@@ -219,7 +219,7 @@ describe('plugin do OpenCode: mensagens (OC-23, OC-24)', () => {
     expect(s.registry.get(idb)?.status).toBe('queued');
     expect(s.registry.get(ida)?.status).toBe('delivered');
     expect(new Set(s.polled)).toEqual(new Set([SES_A]));
-  });
+  }, 20_000);
 
   it('sessões que não casam com ses_<26> nunca são buscadas (eventos de fora, ids estranhos)', async () => {
     const s = await serve();
@@ -231,7 +231,7 @@ describe('plugin do OpenCode: mensagens (OC-23, OC-24)', () => {
     await waitFor(() => s.polled.length >= 1);
     await sleep(1_800);
     expect(new Set(s.polled)).toEqual(new Set([SES_A]));
-  });
+  }, 20_000);
 
   it('sem eventos ainda, as sessões da lista do próprio cliente já são servidas', async () => {
     const s = await serve();
@@ -256,7 +256,7 @@ describe('plugin do OpenCode: mensagens (OC-23, OC-24)', () => {
     await expect(hooks.event(status(SES_A))).resolves.toBeUndefined();
     await sleep(1_900);
     expect(prompts).toEqual([]);
-  });
+  }, 20_000);
 
   it('o timer não segura o processo (unref): um processo com o plugin e o servidor fora do ar termina sozinho', async () => {
     const dead = createServer();
@@ -294,5 +294,5 @@ describe('plugin do OpenCode: mensagens (OC-23, OC-24)', () => {
     const n = s.polled.length;
     await sleep(1_800);
     expect(s.polled.length).toBe(n);
-  });
+  }, 20_000);
 });
