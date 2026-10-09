@@ -536,7 +536,7 @@ permissão real foi aprovado e recusado pelo escritório. "Sempre permitir" e in
   houver página aberta, nada muda e vale a resposta do OpenCode. Não há "sempre permitir" nem "interromper".
 - **Perguntas:** quando o OpenCode faz uma pergunta (a ferramenta `question`), o agente fica esperando e o cartão
   **Precisa de você** mostra a pergunta com as opções, mesmo sem o plugin (nesse caso, na próxima leitura do banco).
-  Responder ou recusar pelo escritório (uma opção, várias ou texto livre; **Recusar…** recusa a pergunta, e o cartão do OpenCode pede um motivo para isso) precisa
+  Responder ou recusar pelo escritório (uma opção, várias ou texto livre; **Recusar…** recusa a pergunta, sem pedir motivo) precisa
   do plugin, e do OpenCode reiniciado depois do `npm run opencode:install`. O plugin espera a sua resposta por até
   **10 minutos** (o `--espera` não muda isso); a pergunta continua na tela do OpenCode: se ninguém responder aqui, ou
   você escolher **Responder no terminal**, vale o prompt do OpenCode, e responder lá faz o cartão sumir. Perguntas com

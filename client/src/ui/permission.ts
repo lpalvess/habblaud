@@ -65,9 +65,10 @@ export interface PermissionOptions {
   note: string;
 }
 
-export function permissionOptions(p: Pick<PermissionRequestInfo, 'provider' | 'suggestions'>, agent: Pick<AgentInfo, 'kind' | 'background'>): PermissionOptions {
+export function permissionOptions(p: Pick<PermissionRequestInfo, 'provider' | 'suggestions'> & { tool?: string }, agent: Pick<AgentInfo, 'kind' | 'background'>): PermissionOptions {
   if (p.provider === 'codex') return { always: false, interrupt: false, reasonRequired: true, seconds: true, note: CODEX_PERMISSION_NOTE };
-  if (p.provider === 'opencode') return { always: false, interrupt: false, reasonRequired: true, seconds: true, note: OPENCODE_PERMISSION_NOTE };
+  // Pergunta: recusar não leva texto (o plugin manda reject sem corpo), então o motivo não é obrigatório.
+  if (p.provider === 'opencode') return { always: false, interrupt: false, reasonRequired: p.tool !== ASK_TOOL, seconds: true, note: OPENCODE_PERMISSION_NOTE };
   // Subagente em segundo plano: o Claude Code só mostra o diálogo depois que o hook responde.
   const blocking = agent.kind === 'sub' && !!agent.background;
   return {
