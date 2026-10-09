@@ -4,6 +4,7 @@
 // SSE segue conectado por baixo, com os snapshots ao vivo guardados até o stopReplay().
 // Também cuida da reconexão: quando o navegador desiste do stream (EventSource fechado após erro HTTP,
 // ex.: servidor reiniciando atrás de um proxy), tenta de novo com espera crescente.
+import type { AppearanceParts } from '../../../shared/appearance';
 import type { Activity, AgentDetail, AgentInfo, FeedItem, Notice, OfficeSnapshot, OutboxMessage, PermissionDecision, PermissionRequestInfo, RoomInfo } from '../../../shared/types';
 import { DemoSimulator } from '../../../shared/demo/simulator';
 
@@ -266,6 +267,41 @@ export class OfficeStore {
       // Resposta sem JSON (ex.: guard): usa a mensagem padrão.
     }
     return `Não foi possível responder (erro ${res.status}).`;
+  }
+
+  /**
+   * Grava o personagem do projeto (PUT /api/agents/:id/character). Devolve undefined se deu certo, ou a mensagem de
+   * erro (nome em uso, acesso que não é local...).
+   */
+  async saveCharacter(id: string, body: { name: string; seed: number; parts: AppearanceParts }): Promise<string | undefined> {
+    return this.characterRequest(id, 'PUT', body);
+  }
+
+  /** "Voltar ao sorteio": apaga o personagem do projeto (DELETE /api/agents/:id/character). */
+  async resetCharacter(id: string): Promise<string | undefined> {
+    return this.characterRequest(id, 'DELETE', {});
+  }
+
+  private async characterRequest(id: string, method: 'PUT' | 'DELETE', body: object): Promise<string | undefined> {
+    if (this.mock || this.replay) return 'Editar o personagem só funciona com o escritório ao vivo.';
+    let res: Response;
+    try {
+      res = await fetch(`/api/agents/${encodeURIComponent(id)}/character`, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      return 'Sem conexão com o Habblaud.';
+    }
+    if (res.ok) return undefined;
+    try {
+      const data = (await res.json()) as { error?: unknown };
+      if (typeof data.error === 'string') return data.error;
+    } catch {
+      // Resposta sem JSON (ex.: guard): usa a mensagem padrão.
+    }
+    return `Não foi possível salvar o personagem (erro ${res.status}).`;
   }
 
   // ---------------------------------------------------------------- mensagens pelo escritório

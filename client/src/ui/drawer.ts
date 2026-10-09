@@ -3,6 +3,7 @@
 import type { Activity, AgentInfo, FeedItem, RoomInfo, ShellJob, TaskItem } from '../../../shared/types';
 import { roomTheme } from '../art';
 import { createAvatarPlaceholder, updateAvatar } from './avatar';
+import { CharacterEditor } from './character-editor';
 import { MessageComposer } from './composer';
 import type { UiComponent, UiContext } from './context';
 import { copyText, h, iconButton, KeyedList, setAttr, setHidden, setStyleVar, setText, setTitle, setVariant } from './dom';
@@ -38,10 +39,12 @@ import {
   visibleShells,
 } from './model';
 import { isLocalHostname, PermissionCard } from './permission';
+import { canRenameRoom } from './roomrename';
 import { accountChipLabel, accountProvider, CODEX_LIVE_HINT, codexApprovalLabel, providerOf } from './provider';
 import { createAgentRow, updateAgentRow } from './rows';
 import { SocialSection } from './social';
 import { TERMINAL_UNAVAILABLE_HINT, type TerminalControl } from './terminal';
+import { Movable } from './movable';
 import { richText } from './usage';
 import {
   createAccountChip,
@@ -54,7 +57,8 @@ import {
   updateStatusDot,
 } from './widgets';
 
-const TIMELINE_LIMIT = 80;
+/** Itens da linha do tempo mostrados de início; "Mostrar mais" acrescenta outro tanto. */
+const TIMELINE_STEP = 15;
 const ROOM_FEED_LIMIT = 15;
 
 // ---------------------------------------------------------------- peças
@@ -236,8 +240,13 @@ class AgentView {
   private teamEmpty: HTMLElement;
   private timeline: KeyedList<Activity>;
   private timelineSec: ReturnType<typeof section>;
+  private timelineMore: HTMLButtonElement;
+  private timelineLess: HTMLButtonElement;
+  /** Quantos itens da linha do tempo aparecem agora. */
+  private timelineShown = TIMELINE_STEP;
   private stats: KvList<StatKey>;
   private social: SocialSection;
+  readonly character: CharacterEditor;
   private sessionValue: HTMLElement;
   private linesPlus: HTMLElement;
   private linesMinus: HTMLElement;
@@ -256,10 +265,11 @@ class AgentView {
     this.accEmail = h('span', { class: 'ui-hero__acc-email' });
     this.roomName = h('span');
     this.roomBtn = h('button', { class: 'ui-room-link', type: 'button', on: { click: () => this.last && ctx.select({ type: 'room', id: this.last.roomId }, { focus: true }) } }, this.roomName);
+    this.character = new CharacterEditor(ctx);
     const heroText = h(
       'div',
       { class: 'ui-hero__text' },
-      h('div', { class: 'ui-hero__line' }, this.name, this.role),
+      h('div', { class: 'ui-hero__line' }, this.name, this.character.button, this.role),
       h('div', { class: 'ui-hero__acc' }, this.accChip, this.accName, this.accProv, this.accEmail),
       h('div', { class: 'ui-hero__where' }, h('span', { class: 'ui-muted', text: 'Sala' }), this.roomBtn),
     );
@@ -347,7 +357,9 @@ class AgentView {
     });
 
     const tl = h('ol', { class: 'ui-timeline' });
-    this.timelineSec = section('Linha do tempo', tl);
+    this.timelineMore = h('button', { class: 'ui-btn ui-btn--sm', type: 'button', on: { click: () => this.showTimeline(this.timelineShown + TIMELINE_STEP) } });
+    this.timelineLess = h('button', { class: 'ui-btn ui-btn--sm', type: 'button', text: 'Mostrar menos', on: { click: () => this.showTimeline(TIMELINE_STEP) } });
+    this.timelineSec = section('Linha do tempo', tl, h('div', { class: 'ui-timeline__more' }, this.timelineMore, this.timelineLess));
     this.timeline = new KeyedList<Activity>(tl, { key: (a) => a.id, create: createTimelineItem, update: (li, a) => updateTimelineItem(li, a, ctx.now()) });
 
     this.sessionValue = h('span', { class: 'ui-mono-inline' });
@@ -375,6 +387,7 @@ class AgentView {
       'div',
       { class: 'ui-drawer__view ui-agent-view' },
       h('div', { class: 'ui-hero' }, this.avatar, heroText),
+      this.character.el,
       this.title,
       this.gone,
       statusRow,
@@ -400,9 +413,11 @@ class AgentView {
 
   open(id: string): void {
     if (this.id === id) return;
+    this.character.open(id);
     this.id = id;
     this.last = null;
     this.history = [];
+    this.timelineShown = TIMELINE_STEP;
     this.timeline.clear();
     this.tasks.clear();
     this.team.clear();
@@ -427,6 +442,11 @@ class AgentView {
     this.terminal.toggle(this.id, this.termBtn);
   }
 
+  private showTimeline(n: number): void {
+    this.timelineShown = Math.max(TIMELINE_STEP, n);
+    this.ctx.invalidate();
+  }
+
   toggleFollow(): void {
     const follow = !this.ctx.world.getOptions().followSelected;
     this.ctx.world.setOptions({ followSelected: follow });
@@ -449,6 +469,7 @@ class AgentView {
     updateAvatar(this.avatar, a, 'lg');
     setStyleVar(this.avatar, '--acc', account?.color ?? '#8b98b3');
     setText(this.name, a.name);
+    this.character.render(a, !!live);
     setText(this.role, roleLabel(a));
     setVariant(this.role, 'ui-role--', a.kind);
     setText(this.title, a.title ?? '');
@@ -561,7 +582,11 @@ class AgentView {
 
     // Linha do tempo (mais recente primeiro).
     this.history = mergeHistory(this.history, a.recent);
-    const items = this.history.slice(-TIMELINE_LIMIT).reverse();
+    const items = this.history.slice(-this.timelineShown).reverse();
+    const hiddenCount = Math.max(0, this.history.length - this.timelineShown);
+    setHidden(this.timelineMore, hiddenCount === 0);
+    setText(this.timelineMore, `Mostrar mais ${Math.min(TIMELINE_STEP, hiddenCount)}`);
+    setHidden(this.timelineLess, this.timelineShown <= TIMELINE_STEP || this.history.length <= TIMELINE_STEP);
     this.timeline.sync(items);
     setText(this.timelineSec.extra, this.history.length ? String(this.history.length) : '');
 
@@ -694,6 +719,7 @@ class RoomView {
   private last: RoomInfo | null = null;
   private swatch: HTMLElement;
   private name: HTMLElement;
+  private renameBtn: HTMLButtonElement;
   private path: HTMLElement;
   private gone: HTMLElement;
   private accs: KeyedList<string>;
@@ -709,6 +735,16 @@ class RoomView {
   constructor(private ctx: UiContext) {
     this.swatch = h('span', { class: 'ui-room-hero__swatch', attrs: { 'aria-hidden': 'true' } });
     this.name = h('h2', { class: 'ui-hero__name' });
+    // Lápis: o mesmo campo do botão direito na sala (ui/roomrename.ts), aberto embaixo do nome.
+    this.renameBtn = iconButton(
+      ICONS.pencil,
+      'Renomear sala',
+      () => {
+        const r = this.name.getBoundingClientRect();
+        ctx.renameRoom?.(this.id, { x: r.left, y: r.bottom + 6 });
+      },
+      'ui-icon-btn--sm ui-room-hero__rename',
+    );
     this.path = h('span', { class: 'ui-room-hero__path' });
     const centerBtn = h('button', { class: 'ui-btn', type: 'button', title: 'Levar a câmera até a sala', on: { click: () => ctx.focusSelection() } });
     centerBtn.innerHTML = ICONS.center;
@@ -753,7 +789,7 @@ class RoomView {
         'div',
         { class: 'ui-room-hero' },
         this.swatch,
-        h('div', { class: 'ui-hero__text' }, this.name, h('span', { class: 'ui-copy-row' }, this.path, copyButton(() => this.last?.path ?? '', 'Copiar caminho'))),
+        h('div', { class: 'ui-hero__text' }, h('div', { class: 'ui-room-hero__title' }, this.name, this.renameBtn), h('span', { class: 'ui-copy-row' }, this.path, copyButton(() => this.last?.path ?? '', 'Copiar caminho'))),
       ),
       this.gone,
       h('div', { class: 'ui-status' }, accsEl, h('span', { class: 'ui-status__actions' }, centerBtn)),
@@ -790,6 +826,7 @@ class RoomView {
       // Sem tema: cor padrão.
     }
     setHidden(this.gone, !!live);
+    setHidden(this.renameBtn, !live || !canRenameRoom(this.ctx, r.id));
 
     const snap = this.ctx.store.snapshot;
     const agents = (snap?.agents ?? []).filter((a) => a.roomId === r.id);
@@ -820,6 +857,9 @@ export class Drawer implements UiComponent {
   private roomView: RoomView;
   private mode: 'agent' | 'room' | null = null;
   private heading: HTMLElement;
+  private movable: Movable;
+  /** Avisado quando a gaveta é solta ou volta ao lugar (a área livre do escritório muda). */
+  onLayoutChange: (() => void) | null = null;
 
   constructor(
     private ctx: UiContext,
@@ -830,17 +870,25 @@ export class Drawer implements UiComponent {
     this.heading = h('span', { class: 'ui-drawer__kind' });
     const close = iconButton(ICONS.close, 'Fechar detalhes (Esc)', () => ctx.select(null));
     this.body = h('div', { class: 'ui-drawer__body' });
+    const bar = h('div', { class: 'ui-drawer__bar' }, this.heading, close);
     this.el = h(
       'aside',
       { class: 'ui-panel ui-drawer', attrs: { 'aria-label': 'Detalhes', id: 'ui-drawer', 'aria-hidden': 'true' } },
-      h('div', { class: 'ui-drawer__bar' }, this.heading, close),
+      bar,
       this.body,
     );
+    // Arrastar pela barra solta a gaveta: flutuante, ela não cobre mais a lateral do escritório.
+    this.movable = new Movable(this.el, bar, { key: 'habblaud.move.drawer', enabled: () => !ctx.isNarrow(), onChange: () => this.onLayoutChange?.() });
     this.el.inert = true;
   }
 
   get isOpen(): boolean {
     return this.mode !== null;
+  }
+
+  /** Solta do lugar (arrastada pela barra). */
+  get floating(): boolean {
+    return this.movable.floating;
   }
 
   toggleFollow(): void {
@@ -851,6 +899,8 @@ export class Drawer implements UiComponent {
     const sel = this.ctx.selection();
     const mode = sel?.type ?? null;
     if (mode !== this.mode) {
+      // Gaveta fechada ou fora do agente: o editor fecha, e ao reabrir começa do estado atual do agente.
+      if (this.mode === 'agent') this.agentView.character.close();
       this.mode = mode;
       this.body.replaceChildren(...(mode === 'agent' ? [this.agentView.el] : mode === 'room' ? [this.roomView.el] : []));
       this.body.scrollTop = 0;

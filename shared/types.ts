@@ -4,6 +4,8 @@
 // Regra de evolução: mudanças aqui devem ser ADITIVAS (campos opcionais novos).
 // Renomear/remover campos quebra servidor, mundo e UI ao mesmo tempo.
 
+import type { AppearanceParts } from './appearance';
+
 export type AgentKind = 'main' | 'sub';
 
 /**
@@ -168,6 +170,10 @@ export interface AgentInfo {
   stats: AgentStats;
   /** Semente 32-bit para a aparência determinística do personagem. */
   seed: number;
+  /** Peças escolhidas no editor do personagem, aplicadas por cima da aparência da `seed` (ver shared/appearance.ts). */
+  parts?: AppearanceParts;
+  /** Usa o personagem escolhido para o projeto (a sala): o painel oferece "Voltar ao sorteio". */
+  custom?: true;
   /** Subagente rodando em segundo plano. */
   background?: boolean;
   /**

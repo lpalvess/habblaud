@@ -1,5 +1,6 @@
 // Simulação do escritório: concilia snapshots do servidor com os personagens e salas do mundo,
 // planeja comportamentos e executa as filas de passos a cada frame.
+import { partsKey } from '../../../../shared/appearance';
 import type { AgentInfo, OfficeSnapshot, Provider, RoomInfo } from '../../../../shared/types';
 import type { ArtModule, Dir, RoomTheme } from '../../art/api';
 import type { WorldOptions } from '../api';
@@ -77,6 +78,9 @@ const ENTER_MS = 180;
 function between(rng: () => number, a: number, b: number): number {
   return a + rng() * (b - a);
 }
+
+/** O que define a aparência de um personagem (muda quando o personagem é editado). */
+const lookSig = (a: AgentInfo): string => `${a.seed}|${a.look}|${partsKey(a.parts)}`;
 
 export class Sim {
   readonly chars = new Map<string, Character>();
@@ -246,7 +250,15 @@ export class Sim {
   private updateAgent(ch: Character, a: AgentInfo, now: number): void {
     const prevStatus = ch.info.status;
     const hadShells = !!ch.info.shells?.length;
+    const prevLook = lookSig(ch.info);
     ch.info = a;
+    if (lookSig(a) !== prevLook) {
+      try {
+        ch.appearance = this.art.appearanceFromSeed(a.seed, { look: a.look, sub: a.kind === 'sub', parts: a.parts });
+      } catch {
+        // Arte com problema: fica a aparência que já estava.
+      }
+    }
     ch.missingSince = null;
     if (a.roomId !== ch.roomId && !ch.leaving) {
       if (ch.homeSpot) this.spots.release(ch.homeSpot, ch.id);
@@ -379,7 +391,7 @@ export class Sim {
   private spawn(a: AgentInfo, first: boolean, now: number): Character | null {
     let appearance;
     try {
-      appearance = this.art.appearanceFromSeed(a.seed, { look: a.look, sub: a.kind === 'sub' });
+      appearance = this.art.appearanceFromSeed(a.seed, { look: a.look, sub: a.kind === 'sub', parts: a.parts });
     } catch {
       return null;
     }

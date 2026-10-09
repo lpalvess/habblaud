@@ -3,6 +3,7 @@
 // Tudo é desenhado em código: a geração acontece em PixelBuf (puro, testável em Node) e só no fim
 // vira canvas, uma única vez por combinação de parâmetros (cache). As funções draw* chamadas a cada
 // quadro (telas, quadro, janela, relógio, pisos, paredes) só fazem fillRect/drawImage de tiles prontos.
+import { partsKey, type AppearanceParts } from '../../../shared/appearance';
 import { hash32 } from '../../../shared/hash';
 import {
   TILE,
@@ -35,6 +36,7 @@ import { roomTheme as roomThemePure } from './theme';
 export * from './api';
 export { hash32 };
 export { drawBoard, drawClock, drawScreen, drawWindowView, footballLance };
+export { editorConflict, editorOptions, fitToOptions, type EditorOptions } from './character/appearance';
 
 // ------------------------------------------------------------------ canvas e cache
 
@@ -86,7 +88,7 @@ function keyOf(a: Appearance): string {
 
 // ------------------------------------------------------------------ personagens
 
-export function appearanceFromSeed(seed: number, opts: { look?: 'f' | 'm'; sub?: boolean } = {}): Appearance {
+export function appearanceFromSeed(seed: number, opts: { look?: 'f' | 'm'; sub?: boolean; parts?: AppearanceParts } = {}): Appearance {
   return appearanceFromSeedPure(seed, opts);
 }
 
@@ -106,9 +108,9 @@ export function characterSprite(req: CharacterFrameRequest): Sprite {
   return charCache.get(key, () => toSprite(renderCharacter({ ...req, frame, seated })));
 }
 
-export function avatarCanvas(seed: number, opts: { look?: 'f' | 'm'; sub?: boolean; scale?: number } = {}): HTMLCanvasElement {
+export function avatarCanvas(seed: number, opts: { look?: 'f' | 'm'; sub?: boolean; scale?: number; parts?: AppearanceParts } = {}): HTMLCanvasElement {
   const scale = Math.max(1, Math.round(opts.scale ?? 3));
-  const key = `${seed}|${opts.look ?? '-'}|${opts.sub ? 1 : 0}|${scale}`;
+  const key = `${seed}|${opts.look ?? '-'}|${opts.sub ? 1 : 0}|${scale}|${partsKey(opts.parts)}`;
   return avatarCache.get(key, () => {
     const s = renderCharacter({ appearance: appearanceFromSeedPure(seed, opts), dir: 'down', pose: 'stand', frame: 0 });
     // Busto: cabeça + ombros (20x20 a partir do topo do cabelo).

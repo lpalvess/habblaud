@@ -69,6 +69,8 @@ festa) ou 10 min. Push só avisa. O mesmo CI visto de novo em 2 min não repete 
 | `GET /api/snapshot` | `OfficeSnapshot` atual |
 | `GET /api/agents/:id` | `AgentDetail` (histórico de até 200 atividades) |
 | `GET /api/agents/:id/terminal` | SSE do terminal: eventos `init` e `append` (`TerminalMessage`); só com bind local (ver abaixo) |
+| `PUT /api/agents/:id/character` | personagem do projeto: `{name, seed, parts}` (ver abaixo); `200 {ok}`, `400`, `404` (não é o principal de uma sessão aberta), `409` (nome em uso); só com acesso local |
+| `DELETE /api/agents/:id/character` | "Voltar ao sorteio": apaga o personagem da sala; `200 {ok}` ou `404`; só com acesso local |
 | `GET /api/sessions/recent` | `RecentSessionsResponse`: sessões dos últimos 7 dias de todas as contas (até 150); mesma trava do terminal |
 | `GET /api/sessions/:conta/:sessionId/terminal` | SSE da conversa de uma sessão do histórico (mesmo protocolo do terminal); mesma trava |
 | `GET /api/stats?day=AAAA-MM-DD&tz=<IANA>&source=real\|demo` | `DayStatsResponse` do "Meu dia" (ver abaixo); padrões: hoje, fuso do servidor, demo se ligado e o dia é hoje |
@@ -282,6 +284,35 @@ snapshot e em `messages` no `/api/health`.
 Qualquer processo local consegue chamar essas rotas (como as de permissão): ligar as mensagens é aceitar que um
 programa da própria máquina possa digitar nas sessões que têm o plugin.
 
+## Personagem do projeto
+
+`PUT /api/agents/:id/character` (`http/app.ts`, regras em `Office.setCharacter`) escolhe o nome e a aparência do agente
+principal `:id` e grava como o personagem da sala dele (o cwd normalizado), em `names.json` › `rooms`:
+`{name, look, seed, parts?, owner?, at}`.
+
+O corpo tem três campos:
+
+- `name`: de 1 a 24 caracteres, em NFC, com os espaços repetidos juntados e sem caracteres de controle;
+- `seed`: inteiro de 0 a 4294967295;
+- `parts`: peças de `shared/appearance.ts`, com os estilos dos enums e as cores em `#rrggbb`. O cliente aplica as peças
+  por cima de `appearanceFromSeed(seed, {look})`.
+
+Regras:
+
+- Quando um principal chega a uma sala que tem personagem, e o nome está livre, ele nasce com `name`, `look`, `seed`,
+  `parts` e `custom: true`. Quem está saindo não conta, porque costuma ser a mesma sessão reaberta. Se o nome não
+  estiver livre, vale o sorteio de sempre.
+- O personagem tem dono (`owner`, o `sessionId` de quem o recebeu ou salvou por último; o `/clear` passa o dono para a
+  sessão nova): uma sessão que não é a dona e já tem nome guardado mantém o dela, para que um reinício do Habblaud
+  não troque identidades nem mude o personagem de uma sessão no meio dela.
+- Os nomes escolhidos ficam reservados: o sorteio não os entrega, sem diferenciar maiúsculas. O `PUT` responde `409`
+  para o nome de alguém presente (inclusive do demo) ou o de outra sala.
+- O `/clear` mantém o personagem e não grava o nome escolhido como o nome sorteado da sessão nova.
+- O `DELETE` apaga o personagem da sala, e o agente volta ao nome sorteado da sessão e à seed do id.
+- Trava: a mesma do terminal (bind local e `Host` local). Sem ela, `403`. Subagente, demo ou agente desconhecido dão
+  `404`.
+- Personagem sem uso há 60 dias some, como os nomes.
+
 ## Codex
 
 Fontes de agentes (`sources/source.ts`): `SourceSet` junta a do Claude Code (`ClaudeWatcher`) e, quando há pastas do
@@ -368,7 +399,7 @@ Terceira fonte, ao lado das do Claude Code e do Codex (`sources/opencode/`); age
 | `HABBLAUD_OPENCODE_DIR` | `$XDG_DATA_HOME/opencode` ou `~/.local/share/opencode` | pasta de dados do OpenCode (onde fica o `opencode.db`) |
 | `HABBLAUD_MENSAGENS` | ligado (com o terminal) | `0`, `false`, `off` ou `no` desligam só as mensagens pelo escritório |
 | `HABBLAUD_CLAUDE_DIRS` | — | config dirs separados por vírgula; substitui a detecção (`~/.claude*` com `projects/` ou `sessions/` + `CLAUDE_CONFIG_DIR`) |
-| `HABBLAUD_DATA_DIR` | `~/.habblaud` (Docker: `/data`) | estado do Habblaud (nomes persistidos em `names.json`, linha do tempo em `timeline/`, estatísticas do Meu dia em `stats/`, última verificação de versão em `updates.json`) |
+| `HABBLAUD_DATA_DIR` | `~/.habblaud` (Docker: `/data`) | estado do Habblaud (nomes e personagens dos projetos persistidos em `names.json`, linha do tempo em `timeline/`, estatísticas do Meu dia em `stats/`, última verificação de versão em `updates.json`) |
 | `HABBLAUD_TIMELINE` | ligado | `0` desliga a gravação da linha do tempo do timelapse |
 | `HABBLAUD_UPDATE_CHECK` | ligado | `0` desliga a verificação de versão nova (releases do repositório do `package.json` no GitHub, a cada 6 h) |
 | `HABBLAUD_DEMO` | desligado | `1` liga o modo demonstração ao iniciar |

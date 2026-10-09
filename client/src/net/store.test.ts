@@ -251,3 +251,33 @@ describe('fonte alternativa (timelapse)', () => {
     }
   });
 });
+
+describe('personagem do projeto (store)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('saveCharacter: PUT JSON na rota do agente; devolve undefined ou a mensagem de erro do servidor', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: 'Ana já está no escritório em api' }), { status: 409 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const store = new OfficeStore();
+    expect(await store.saveCharacter('.claude:1', { name: 'Ana', seed: 1, parts: {} })).toBe('Ana já está no escritório em api');
+    expect(fetchMock).toHaveBeenCalledWith('/api/agents/.claude%3A1/character', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"name":"Ana","seed":1,"parts":{}}',
+    });
+    fetchMock.mockResolvedValueOnce(new Response('{"ok":true}', { status: 200 }));
+    expect(await store.saveCharacter('.claude:1', { name: 'Ana', seed: 1, parts: {} })).toBeUndefined();
+  });
+
+  it('resetCharacter: DELETE com corpo JSON; sem conexão vira mensagem; no mock não chama a rede', async () => {
+    const fetchMock = vi.fn(async () => new Response('{"ok":true}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await new OfficeStore().resetCharacter('a')).toBeUndefined();
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/agents/a/character', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    fetchMock.mockRejectedValueOnce(new TypeError('failed to fetch'));
+    expect(await new OfficeStore().resetCharacter('a')).toBe('Sem conexão com o Habblaud.');
+    const calls = fetchMock.mock.calls.length;
+    expect(await new OfficeStore({ mock: true }).resetCharacter('a')).toMatch(/ao vivo/);
+    expect(fetchMock.mock.calls.length).toBe(calls);
+  });
+});

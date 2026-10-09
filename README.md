@@ -309,9 +309,9 @@ npm run mod:uninstall                       # tira o mod, os plugins de permiss�
 npm run codex:uninstall                     # tira os hooks do Habblaud do Codex (os outros ficam)
 npm run opencode:uninstall                  # tira o plugin do OpenCode (só os dois arquivos que o instalador gravou)
 npm run docker:down                         # para o container
-docker volume rm habblaud_habblaud-data     # apaga os dados do container (nomes, linha do tempo e estatísticas)
+docker volume rm habblaud_habblaud-data     # apaga os dados do container (nomes, salas, linha do tempo e estatísticas)
 docker image rm habblaud:local              # apaga a imagem
-rm -rf ~/.habblaud                          # apaga os dados locais (uso capturado, nomes, linha do tempo e estatísticas)
+rm -rf ~/.habblaud                          # apaga os dados locais (uso capturado, nomes, salas, linha do tempo e estatísticas)
 ```
 
 Depois é só apagar a pasta do projeto — rode o `mod:uninstall` **antes**, senão o Claude Code das contas passa a
@@ -466,6 +466,23 @@ e espera o próximo pedido, dar uma instrução nova ou corrigir o rumo, sem pro
   Leia o aviso em [Privacidade e segurança](#privacidade-e-segurança).
 - No modo demonstração, os agentes fictícios também recebem mensagens (de mentira).
 
+### Editar o personagem
+
+Cada sessão chega com um nome e uma aparência sorteados. Para fixar o personagem de um projeto, abra os detalhes do
+agente principal e clique no lápis ao lado do nome (**Editar personagem**). No editor:
+
+- **Nome:** até 24 caracteres. Não pode repetir o de alguém que está no escritório nem o escolhido para outro
+  projeto.
+- **Sortear:** traz outra aparência.
+- **Peças:** pele, cabelo, barba, olhos, parte de cima, parte de baixo, sapatos e acessório, com a prévia ao lado.
+- **Salvar:** vale para o projeto (a sala). A próxima sessão aberta nele chega com esse personagem. Com duas sessões
+  ao mesmo tempo na mesma sala, a segunda recebe um personagem sorteado.
+- **Voltar ao sorteio:** desfaz a escolha.
+
+A escolha fica em `~/.habblaud/names.json` e some depois de 60 dias sem uso do projeto. O editor tem a mesma trava do
+terminal: o lápis só aparece com o terminal ligado (sem `HABBLAUD_TERMINAL=0`) e o acesso local, isto
+é, com o Habblaud acessível apenas pelo próprio computador e aberto por `http://localhost`.
+
 ### Codex
 
 As sessões do Codex (CLI ou app) aparecem como as do Claude Code: personagem, sala do projeto, atividade, tarefas,
@@ -604,8 +621,9 @@ cada conta. Confira com `npm run mod:status`. Em versões anteriores do Claude C
 
 - O `usage:install` (jeito antigo) altera, em `<conta>/settings.json`, **só** o campo `statusLine.command`: o comando
   original (ex.: `npx -y ccstatusline`) passa a rodar através de `node "<pasta do Habblaud>/scripts/statusline-tap.mjs" --
-  <comando original>`. Uma cópia do arquivo vai antes para `settings.json.habblaud-backup-<data>`. Se a conta não tinha
-  statusline, é criado um que só captura o uso. `npm run usage:install -- --dry-run` mostra o que mudaria sem gravar.
+  <comando original>` (no Windows, o comando original roda no Git Bash, como o Claude Code o rodaria). Uma cópia do
+  arquivo vai antes para `settings.json.habblaud-backup-<data>`. Se a conta não tinha statusline, é criado um que só
+  captura o uso. `npm run usage:install -- --dry-run` mostra o que mudaria sem gravar.
 - O tap repassa o mesmo JSON ao seu statusline (saída e código de saída continuam os dele) e grava **somente**
   `{accountId, configDir, fetchedAt, five_hour, seven_day}` — nada de prompts, custos ou caminhos de projeto. Qualquer
   falha na captura é ignorada: o statusline nunca quebra por causa do Habblaud.
@@ -632,16 +650,16 @@ Tudo funciona sem configurar nada. Se precisar ajustar, use variáveis de ambien
 | `HABBLAUD_HOST` | `127.0.0.1` | Interface do servidor no modo Node. Fora de `127.0.0.1`/`localhost`, o terminal (e responder e mandar mensagens pelo escritório) fica desligado. |
 | `HABBLAUD_BIND` | `127.0.0.1` | Só Docker (no `.env`): onde a porta é publicada. `0.0.0.0` libera a rede local (e desliga o terminal e o que age sobre as sessões). |
 | `HABBLAUD_CLAUDE_DIRS` | detecção automática | Pastas das contas, separadas por vírgula (ex.: `/caminho/conta1,/caminho/conta2`). |
-| `HABBLAUD_DATA_DIR` | `~/.habblaud` | Onde o Habblaud guarda os próprios dados (nomes dos personagens, linha do tempo do timelapse e estatísticas do Meu dia). |
+| `HABBLAUD_DATA_DIR` | `~/.habblaud` | Onde o Habblaud guarda os próprios dados (nomes dos personagens e das salas, linha do tempo do timelapse e estatísticas do Meu dia). |
 | `HABBLAUD_TIMELINE` | ligado | `0` desliga a gravação da linha do tempo (os dias já gravados continuam no timelapse). No Docker fica sempre ligado. |
 | `HABBLAUD_USAGE_DIR` | `~/.habblaud/usage` | Onde o mod (ou o tap de statusline) grava o uso. |
 | `HABBLAUD_DEMO` | desligado | `1` liga o modo demonstração ao iniciar. |
 | `HABBLAUD_ALLOWED_HOSTS` | — | Nomes extras aceitos no endereço (ex.: `meu-mac.local`), além de `localhost` e IPs. |
-| `HABBLAUD_TERMINAL` | ligado (só com acesso local) | `0` desliga o terminal, responder e mandar mensagens pelo escritório. Com a porta exposta eles já ficam desligados, sem opção de ligar. |
+| `HABBLAUD_TERMINAL` | ligado (só com acesso local) | `0` desliga o terminal, responder e mandar mensagens pelo escritório e o editor de personagem. Com a porta exposta eles já ficam desligados, sem opção de ligar. |
 | `HABBLAUD_MENSAGENS` | ligado (com o terminal) | `0` desliga só as mensagens pelo escritório (a caixa no terminal e nos detalhes do agente). |
 | `HABBLAUD_CODEX` | ligado | `0` desliga o Codex no escritório. |
 | `HABBLAUD_CODEX_DIRS` | detecção automática | Pastas do Codex, separadas por vírgula (no lugar de `~/.codex*` e `CODEX_HOME`). |
-| `HABBLAUD_CODEX_BIN` | `codex` do PATH | O binário do Codex que entrega as mensagens (`codex queue`), no modo Node ou no `npm run codex:bridge`. |
+| `HABBLAUD_CODEX_BIN` | `codex` do PATH (no Windows, `codex.exe`) | O binário do Codex que entrega as mensagens (`codex queue`), no modo Node ou no `npm run codex:bridge`. |
 | `HABBLAUD_OPENCODE` | ligado | `0` desliga o OpenCode no escritório (a leitura do banco e os eventos do plugin). |
 | `HABBLAUD_OPENCODE_DIR` | `$XDG_DATA_HOME/opencode` ou `~/.local/share/opencode` | Pasta de dados do OpenCode (onde fica o `opencode.db`). |
 | `HABBLAUD_UPDATE_CHECK` | ligado | `0` desliga a verificação de versão nova (uma consulta às releases do repositório no GitHub a cada 6 h). |
@@ -695,6 +713,8 @@ mod/      o mod do Habblaud e os plugins de permissões e de mensagens (plugins 
 | `GET /api/snapshot` | Estado atual do escritório. |
 | `GET /api/agents/:id` | Detalhes de um agente, com até 200 atividades. |
 | `GET /api/agents/:id/terminal` | SSE do terminal (eventos `init` e `append`); só com acesso local. |
+| `PUT /api/agents/:id/character` | Editar o personagem: `{name, seed, parts}` grava o nome e a aparência do agente principal como o personagem do projeto (a sala); só com acesso local. |
+| `DELETE /api/agents/:id/character` | "Voltar ao sorteio": apaga o personagem do projeto e o agente volta ao nome sorteado; só com acesso local. |
 | `GET /api/sessions/recent` | Histórico: sessões dos últimos 7 dias de todas as contas (até 150); só com acesso local. |
 | `GET /api/sessions/:conta/:sessionId/terminal` | SSE da conversa de uma sessão do histórico (mesmo protocolo do terminal); só com acesso local. |
 | `GET /api/stats?day=AAAA-MM-DD` | Estatísticas do Meu dia (tempo por status, projetos, contas, horas, esperas, tokens e custo). |
@@ -703,6 +723,7 @@ mod/      o mod do Habblaud e os plugins de permissões e de mensagens (plugins 
 | `GET /api/timeline/:dia` | Linha do tempo de um dia (`AAAA-MM-DD`), em JSONL (com gzip). |
 | `GET /api/health` | Saúde: versão, demonstração, Docker, terminal, responder e mandar mensagens pelo escritório, fontes e status de uso de cada conta. |
 | `POST /api/demo` | `{"enabled": true \| false}` liga ou desliga os agentes simulados. |
+| `POST /api/rooms/rename` | `{"id": sala, "name": nome}` renomeia a sala (vazio volta ao nome da pasta); o nome fica em `rooms.json`, na pasta de dados. Só com acesso local. |
 | `GET /api/mod/summary` | Para o mod do Claude Code: versão, quantos agentes, quantos trabalham e quem precisa de você (sem o demo e, com `?account=&session=`, sem a própria sessão). |
 | `/api/permissions…` | Responder pelo escritório: o hook de permissão registra o pedido (permissão ou pergunta) e espera; a página busca o detalhe e decide ou responde. Só com acesso local. |
 | `/api/messages…` e `/api/mod/inbox…` | Mandar mensagens: a página deixa a mensagem na fila e acompanha a entrega; o plugin `habblaud-mensagens` a busca, entrega à sessão e confirma. Só com acesso local. |
@@ -781,6 +802,9 @@ das contas (letra, e-mail, organização) são lidos no host pelo `docker:up` e 
   que tenha o plugin. Se isso não serve para você (computador compartilhado, agentes rodando sem supervisão), não
   instale o plugin (`npm run mod:install -- --sem-mensagens`) ou desligue com `HABBLAUD_MENSAGENS=0`. O texto das
   mensagens não é gravado: some do servidor assim que é entregue.
+- **Editor de personagem, só local:** salvar ou voltar ao sorteio muda o escritório e grava em `names.json`, então
+  segue a mesma trava do terminal (bind local, `Host` local, nada de proxies ou túneis): sem ela, o lápis não aparece
+  e o servidor responde `403`. As mudanças exigem JSON e origem local. `HABBLAUD_TERMINAL=0` desliga junto.
 - **Estatísticas do Meu dia:** só números agregados (tempo por status, contagens, tokens, custo) com nomes de projeto,
   conta e agente, guardados em `HABBLAUD_DATA_DIR/stats/` por 30 dias — nada da conversa.
 - **Codex:** o Habblaud lê só as conversas (`sessions/`, `archived_sessions/`) e as travas das sessões abertas

@@ -1,5 +1,6 @@
 // Rotas da API (/api/*). Respostas JSON; rotas desconhecidas -> 404 JSON.
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { NAME_MAX, parseAppearanceParts, parseCharacterName, parseSeed } from '../../shared/appearance';
 import type { AgentInfo, ModSummary, OfficeSnapshot, SourceInfo, UpdateStatus } from '../../shared/types';
 import type { AccountsService } from '../accounts/service';
 import { handleCodexEvent } from '../codex/http';
@@ -57,6 +58,8 @@ export interface ApiDeps {
    */
   opencodeEvents?: boolean;
   opencodeLive?: OpencodeLive;
+  /** Renomeia a sala (POST /api/rooms/rename {id, name}; vazio volta ao padrão). Devolve o nome em uso, ou undefined se a sala não existe. */
+  renameRoom?: (id: string, name: string) => string | undefined;
   /** Estatísticas do "Meu dia" (GET /api/stats, http/stats.ts). */
   stats?: DayStatsService;
   /** Verificação de versão nova no GitHub (GET /api/updates, POST /api/updates/check; updates/checker.ts). */
@@ -68,6 +71,10 @@ export interface ApiDeps {
 
 /** GET /api/agents/:id/terminal (ids nunca contêm '/'). */
 const TERMINAL_ROUTE = /^\/api\/agents\/([^/]+)\/terminal$/;
+
+/** PUT|DELETE /api/agents/:id/character: personagem do projeto (ver Office.setCharacter). */
+const CHARACTER_ROUTE = /^\/api\/agents\/([^/]+)\/character$/;
+const NOT_EDITABLE = 'agente não encontrado: só o agente principal de uma sessão aberta tem personagem editável';
 
 /** Conexão vinda do próprio computador (127.x, ::1 ou ::ffff:127.x). */
 function isLoopbackAddress(addr: string | undefined): boolean {
@@ -208,6 +215,25 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
     sendJson(res, 200, { ok: true, demo: office.isDemo() });
   };
 
+  const handleCharacter = async (req: IncomingMessage, res: ServerResponse, id: string, method: string) => {
+    if (method === 'DELETE') {
+      req.resume();
+      if (office.resetCharacter(id) === 'not-found') return sendJson(res, 404, { error: NOT_EDITABLE });
+      return sendJson(res, 200, { ok: true });
+    }
+    const body = (await readJson(req)) as { name?: unknown; seed?: unknown; parts?: unknown } | null;
+    const name = parseCharacterName(body?.name);
+    const seed = parseSeed(body?.seed);
+    const parts = parseAppearanceParts(body?.parts);
+    if (!name || seed === null || !parts) {
+      throw new HttpError(400, `esperado {name: texto de 1 a ${NAME_MAX} caracteres, seed: inteiro de 0 a 4294967295, parts: peças da aparência}`);
+    }
+    const r = office.setCharacter(id, { name, seed, parts });
+    if (r.result === 'not-found') return sendJson(res, 404, { error: NOT_EDITABLE });
+    if (r.result === 'conflict') return sendJson(res, 409, { error: r.message });
+    sendJson(res, 200, { ok: true });
+  };
+
   const fail = (res: ServerResponse, err: unknown) => {
     if (res.headersSent) return void res.destroy();
     if (err instanceof HttpError) sendJson(res, err.status, { error: err.message });
@@ -297,6 +323,26 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
       }
       return true;
     }
+    const characterMatch = CHARACTER_ROUTE.exec(path);
+    if (characterMatch) {
+      // Mudar o personagem age sobre o escritório: a mesma trava do terminal (bind local + Host local).
+      if (method !== 'PUT' && method !== 'DELETE') methodNotAllowed(res, 'PUT, DELETE');
+      else if (!deps.terminal) {
+        sendJson(res, 403, { error: 'editar o personagem desligado: só funciona com o Habblaud acessível apenas pelo próprio computador' });
+      } else if (!isLoopbackHost(req.headers.host)) {
+        sendJson(res, 403, { error: 'o personagem só é editado pelo próprio computador (http://localhost ou http://127.0.0.1)' });
+      } else {
+        let id: string;
+        try {
+          id = decodeURIComponent(characterMatch[1]);
+        } catch {
+          sendJson(res, 400, { error: 'id inválido' });
+          return true;
+        }
+        handleCharacter(req, res, id, method).catch((err) => fail(res, err));
+      }
+      return true;
+    }
     if (path === '/api/codex/events') {
       // Eventos dos hooks do Codex: só observam, mas só valem vindos do próprio computador. Fora do Docker o hook
       // sempre conecta pelo loopback (o Host sozinho um cliente da rede consegue imitar); no Docker ele chega pela porta
@@ -343,6 +389,23 @@ export function createApiHandler(deps: ApiDeps): (req: IncomingMessage, res: Ser
       const detail = office.detail(id);
       if (detail) sendJson(res, 200, detail);
       else sendJson(res, 404, { error: 'agente não encontrado' });
+      return true;
+    }
+    if (path === '/api/rooms/rename') {
+      // Como o personagem: a mesma trava do terminal (bind local + Host local).
+      if (method !== 'POST') methodNotAllowed(res, 'POST');
+      else if (!deps.terminal) sendJson(res, 403, { error: 'renomear salas desligado: só funciona com o Habblaud acessível apenas pelo próprio computador' });
+      else if (!isLoopbackHost(req.headers.host)) sendJson(res, 403, { error: 'renomear salas só pelo próprio computador (http://localhost)' });
+      else
+        readJson(req)
+          .then((body) => {
+            const b = body as { id?: unknown; name?: unknown };
+            if (typeof b?.id !== 'string' || typeof b.name !== 'string') throw new HttpError(400, 'esperado {id, name}');
+            const name = deps.renameRoom?.(b.id, b.name);
+            if (name === undefined) throw new HttpError(404, 'sala não encontrada');
+            sendJson(res, 200, { name });
+          })
+          .catch((err) => fail(res, err));
       return true;
     }
     if (path === '/api/stats' || path.startsWith('/api/stats/')) {

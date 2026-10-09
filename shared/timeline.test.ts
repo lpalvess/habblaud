@@ -202,4 +202,14 @@ describe('timeline: leitura do arquivo', () => {
     expect(acc.usage).toEqual({ source: 'statusline', fetchedAt: T0 + 99, fiveHour: { utilization: 10, resetsAt: T0 + 3_600_000 } });
     expect(acc.configDir).toBe('');
   });
+
+  it('parts do personagem editado vão e voltam; agente sem parts continua sem', () => {
+    const parts = { skin: '#5a3623', hairStyle: 'bob' } as const;
+    const c = compactAgent(agent('.claude:1', { parts }));
+    expect(c.parts).toEqual(parts);
+    expect(toAgentInfo(c).parts).toEqual(parts);
+    const plain = compactAgent(agent('.claude:2'));
+    expect('parts' in plain).toBe(false);
+    expect(toAgentInfo(plain).parts).toBeUndefined();
+  });
 });

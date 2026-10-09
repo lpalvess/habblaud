@@ -12,6 +12,7 @@
 //
 // Só entram os campos que o mundo e a interface usam para desenhar, com os resumos de atividade já
 // mascarados (a mesma exposição do /api/snapshot): nada de detalhe de comando, tarefa ou transcript.
+import type { AppearanceParts } from './appearance';
 import type { AccountInfo, AccountUsage, Activity, ActivityKind, AgentInfo, AgentKind, AgentStatus, OfficeSnapshot, Provider, RoomInfo, ShellJob } from './types';
 
 export const TIMELINE_VERSION = 1;
@@ -55,6 +56,8 @@ export interface TimelineAgent {
   waitingFor?: string;
   activity?: TimelineActivity;
   seed: number;
+  /** Peças do personagem editado (ver AgentInfo.parts). */
+  parts?: AppearanceParts;
   background?: true;
   title?: string;
   shells?: TimelineShell[];
@@ -198,6 +201,7 @@ export function compactAgent(a: AgentInfo, demo = false): TimelineAgent {
   if (a.waitingFor) out.waitingFor = a.waitingFor;
   if (a.activity) out.activity = compactActivity(a.activity);
   if (a.background) out.background = true;
+  if (a.parts && Object.keys(a.parts).length) out.parts = { ...a.parts };
   if (a.title) out.title = clip(a.title, MAX_TITLE);
   if (a.shells?.length) out.shells = a.shells.map(compactShell);
   if (demo) out.demo = true;
@@ -427,6 +431,7 @@ export function toAgentInfo(t: TimelineAgent, recent: Activity[] = []): AgentInf
   if (activity) a.activity = activity;
   if (t.shells?.length) a.shells = t.shells.map((j) => ({ ...j }));
   if (t.background) a.background = true;
+  if (t.parts) a.parts = { ...t.parts };
   return a;
 }
 
