@@ -75,6 +75,37 @@ function read<T>(db: OcDb, key: string, fallback: T, run: () => T): T {
   }
 }
 
+/**
+ * Roda `fn` (as consultas de UM ciclo de leitura) numa única transação de leitura: no modo WAL o ciclo inteiro enxerga o
+ * mesmo instantâneo, então uma gravação do OpenCode entre duas consultas só aparece no ciclo seguinte. Termina sempre
+ * com COMMIT (ROLLBACK se o COMMIT falhar). Se o BEGIN falhar (já dentro de uma transação, banco fechado...), segue sem
+ * transação, como antes, com as mesmas regras de cache de `read`.
+ */
+export function inSnapshot<T>(db: OcDb, fn: () => T): T {
+  let begun = false;
+  try {
+    db.raw.exec('BEGIN');
+    begun = true;
+  } catch {
+    // sem instantâneo: cada consulta lê o que houver
+  }
+  try {
+    return fn();
+  } finally {
+    if (begun) {
+      try {
+        db.raw.exec('COMMIT');
+      } catch {
+        try {
+          db.raw.exec('ROLLBACK');
+        } catch {
+          // transação já encerrada
+        }
+      }
+    }
+  }
+}
+
 export interface OcSession {
   id: string;
   projectId: string;

@@ -14,7 +14,7 @@ import type { Office } from '../../model/office';
 import type { AgentSource } from '../source';
 import { SESSION_ID_RE, type OpencodeEvent, type OpencodeLive } from './live';
 import { describeOpencodePart, describeOpencodeTool } from './activity';
-import { DB_FILE, lastMessage, lastPart, listSessions, openDb, todos, type OcDb, type OcSession, type OpenOptions } from './files';
+import { DB_FILE, inSnapshot, lastMessage, lastPart, listSessions, openDb, todos, type OcDb, type OcSession, type OpenOptions } from './files';
 
 /** Sessão sem escrita há mais que isto (ou arquivada) sai do escritório. */
 export const PRESENCE_MS = 30 * 60_000;
@@ -201,6 +201,11 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
   poll(): void {
     const db = this.db;
     if (!db) return;
+    inSnapshot(db, () => this.pollOnce(db));
+  }
+
+  /** O corpo do ciclo, todo dentro de uma transação de leitura (instantâneo único do banco). */
+  private pollOnce(db: OcDb): void {
     const now = (this.lastPollAt = this.now());
     const rows = listSessions(db, now - PRESENCE_MS);
     const byId = new Map(rows.map((r) => [r.id, r]));
