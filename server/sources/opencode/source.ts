@@ -8,6 +8,7 @@
 // e `state.title`; nunca o conteúdo). Sala: `session.directory`, ou `project.worktree` se vier vazio.
 import { watch, type FSWatcher } from 'node:fs';
 import type { Activity, AgentStatus, SourceInfo, TaskItem } from '../../../shared/types';
+import { describeTool, SPECIAL } from '../../../shared/activity';
 import type { AccountsService } from '../../accounts/service';
 import { errMsg, log } from '../../log';
 import type { Office } from '../../model/office';
@@ -26,6 +27,24 @@ const MAX_DEPTH = 8;
 /** Depois de um evento ao vivo, o ciclo de leitura não o desfaz por este tempo (o banco costuma chegar um pouco depois); passado isso, o banco manda. */
 export const LIVE_HOLD_MS = 3_000;
 const TITLE_MAX = 200;
+/** Uma pergunta sem question.replied, question.rejected nem session.idle some daqui a este tempo (OQ-06). */
+export const QUESTION_TTL_MS = 30 * 60_000;
+/** Motivo mostrado no cartão enquanto o agente espera a resposta de uma pergunta. */
+const WAIT_QUESTION = 'responder uma pergunta';
+
+/** Pergunta do OpenCode (ferramenta `question`) ainda sem resposta. `id` vazio = o evento não trouxe um. */
+interface PendingQuestion {
+  id: string;
+  since: number;
+}
+
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+
+/** `questions` do OpenCode como o AskUserQuestion do Claude as descreve (`multiple` vira `multiSelect`). */
+function askInput(raw: unknown): { questions: unknown[] } {
+  const list = Array.isArray(raw) ? raw.slice(0, 100) : [];
+  return { questions: list.map((q) => (isObj(q) ? { question: q.question, header: q.header, options: q.options, multiSelect: q.multiple === true } : q)) };
+}
 
 export interface OpencodeSourceOptions {
   accounts: AccountsService;
@@ -58,6 +77,8 @@ interface Tracker {
   title?: string;
   liveTasks?: TaskItem[];
   tasksUntil?: number;
+  /** Pergunta do OpenCode esperando resposta: segura o `waiting` sobre o banco até responder, idle ou QUESTION_TTL_MS. */
+  pendingQuestion?: PendingQuestion;
 }
 
 const depthOf = (row: OcSession, byId: Map<string, OcSession>): number => {
@@ -269,9 +290,11 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
     let status: AgentStatus = msg && msg.completed === undefined ? 'working' : 'idle';
 
     let t = this.trackers.get(key);
+    if (t?.pendingQuestion && now - t.pendingQuestion.since >= QUESTION_TTL_MS) this.clearQuestion(t, 'answered');
     // Um evento ao vivo recente vale sobre o banco, que ainda pode não ter alcançado (depois da janela, o banco manda).
     if (t && t.inOffice && t.liveUntil !== undefined && now < t.liveUntil) status = t.status;
     if (t && t.inOffice && !office.has(key)) t.inOffice = false; // saiu do escritório (período de graça encerrado)
+    if (t?.pendingQuestion) status = 'waiting'; // pergunta sem resposta: o banco (turno aberto) não a desfaz
     if (!t) {
       const parentKey = row.parentId ? `opencode:${row.parentId}` : undefined;
       const parent = parentKey ? this.trackers.get(parentKey) : undefined;
@@ -281,7 +304,7 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
     }
 
     if (!t.inOffice) this.enter(t, row, cwd, status, now);
-    else if (status !== t.status) this.setStatus(t, status);
+    else if (status !== t.status) this.setStatus(t, status, status === 'waiting' ? WAIT_QUESTION : undefined);
     t.status = status;
     t.title = row.title || undefined;
     if (!t.inOffice) return true;
@@ -325,10 +348,10 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
   }
 
   /** Leva o status ao escritório (o subagente entrega ao ficar ocioso e volta ao trabalhar). */
-  private setStatus(t: Tracker, status: AgentStatus): void {
+  private setStatus(t: Tracker, status: AgentStatus, waitingFor?: string): void {
     const office = this.opts.office;
     if (t.kind === 'main') {
-      office.setStatus(t.key, status);
+      office.setStatus(t.key, status, waitingFor);
       return;
     }
     if (status === 'idle') {
@@ -340,7 +363,7 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
       office.reactivateSub(t.key);
       t.subDone = office.isSubDone(t.key);
     }
-    if (!t.subDone) office.setStatus(t.key, status);
+    if (!t.subDone) office.setStatus(t.key, status, waitingFor);
   }
 
   /** Atividade da última parte (ferramenta, raciocínio ou resposta), uma vez por parte nova. */
@@ -393,18 +416,22 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
     if (!t || !t.inOffice) return false; // sessão que o ciclo de leitura ainda não conhece (ele a traz em até 1 s)
     switch (event.type) {
       case 'session.idle':
+        this.clearQuestion(t, 'answered');
         this.liveStatus(t, 'idle');
         return true;
       case 'session.status': {
         const type = (props.status as { type?: unknown } | undefined)?.type;
-        if (type === 'idle') this.liveStatus(t, 'idle');
-        else if (type === 'busy' || type === 'retry') this.liveStatus(t, 'working');
+        if (type === 'idle') {
+          this.clearQuestion(t, 'answered');
+          this.liveStatus(t, 'idle');
+        } else if (type === 'busy' || type === 'retry') this.liveStatus(t, 'working');
         else return false;
         return true;
       }
       case 'tool.execute.before': {
         const tool = typeof props.tool === 'string' ? props.tool.trim() : '';
         if (!tool) return false;
+        if (t.pendingQuestion) return true; // esperando uma pergunta: outra ferramenta não troca o cartão
         this.liveStatus(t, 'working');
         const title = typeof props.title === 'string' ? props.title.slice(0, TITLE_MAX) : undefined;
         const callID = typeof props.callID === 'string' ? props.callID.slice(0, 80) : '';
@@ -435,6 +462,25 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
         });
         return true;
       }
+      case 'question.asked': {
+        const qid = typeof props.id === 'string' ? props.id.slice(0, 100) : '';
+        const prev = t.pendingQuestion;
+        t.pendingQuestion = prev && prev.id === qid ? prev : { id: qid, since: this.now() };
+        const desc = describeTool('AskUserQuestion', askInput(props.questions));
+        const id = `${t.key}#ask:${qid || this.now()}`;
+        this.opts.office.addActivity(t.key, { id, at: this.now(), ...desc, tool: 'AskUserQuestion' }, true);
+        this.liveStatus(t, 'waiting', WAIT_QUESTION);
+        return true;
+      }
+      case 'question.replied':
+      case 'question.rejected': {
+        const rid = typeof props.requestID === 'string' ? props.requestID : '';
+        const pending = t.pendingQuestion;
+        if (pending && pending.id && rid && pending.id !== rid) return true; // resposta de outro pedido
+        this.clearQuestion(t, event.type === 'question.rejected' ? 'rejected' : 'answered');
+        if (pending) this.liveStatus(t, 'working');
+        return true;
+      }
       case 'permission.asked':
       case 'permission.updated':
         return true; // o cartão vem de POST /api/permissions (registro de permissões); aqui só confirma a sessão
@@ -444,10 +490,25 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
   }
 
   /** Status de um evento: vale sobre o banco por LIVE_HOLD_MS e mantém o rastreador coerente (o ciclo não o desfaz na hora). */
-  private liveStatus(t: Tracker, status: AgentStatus): void {
+  private liveStatus(t: Tracker, status: AgentStatus, waitingFor?: string): void {
+    if (status === 'working' && t.pendingQuestion) return; // o OpenCode segue "busy" enquanto a pergunta espera
     t.liveUntil = this.now() + LIVE_HOLD_MS;
-    if (t.status !== status) this.setStatus(t, status);
+    if (t.status !== status || status === 'waiting') this.setStatus(t, status, waitingFor);
     t.status = status;
+  }
+
+  /**
+   * Encerra a pergunta pendente (respondida, recusada, idle ou expirada) e, se o balão ainda mostra a pergunta aberta,
+   * troca por "recebeu a sua resposta" / "você recusou", para o cartão e as opções não ficarem velhos.
+   */
+  private clearQuestion(t: Tracker, how: 'answered' | 'rejected'): void {
+    if (!t.pendingQuestion) return;
+    t.pendingQuestion = undefined;
+    const office = this.opts.office;
+    const cur = office.get(t.key)?.activity;
+    if (cur?.kind !== 'ask' || cur.text === SPECIAL.answered().text) return;
+    const desc = how === 'rejected' ? SPECIAL.rejected() : SPECIAL.answered();
+    office.addActivity(t.key, { id: `${t.key}#askend:${this.now()}:${how}`, at: this.now(), ...desc }, true);
   }
 
   /** Sai do escritório: principal encerra; subagente entrega (se ainda não tinha entregado). */
