@@ -34,12 +34,18 @@ describe('createOpencodeSource', () => {
     expect(importer).not.toHaveBeenCalled();
   });
 
-  it('OC-08: sem opencode.db não cria a fonte e não loga', () => {
+  it('OC-08: sem opencode.db a fonte fica dormente: nada registrado e nada logado', async () => {
     setQuiet(false);
     const spies = (['log', 'warn', 'error'] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
     const t = tempDir();
     cleanups.push(t.cleanup);
-    expect(createOpencodeSource({ opencode: true, opencodeDir: t.dir }, deps())).toBeUndefined();
+    const d = deps();
+    const src = createOpencodeSource({ opencode: true, opencodeDir: t.dir }, d)!;
+    cleanups.push(() => src.stop());
+    await src.start();
+    expect(src.sources()).toEqual([]);
+    expect(d.office.commit().snapshot.agents).toEqual([]);
+    expect(d.office.commit().snapshot.accounts.filter((a) => a.id === 'opencode')).toEqual([]);
     for (const s of spies) expect(s).not.toHaveBeenCalled();
   });
 
@@ -76,5 +82,68 @@ describe('createOpencodeSource', () => {
     expect(err).not.toHaveBeenCalled();
     expect(set.of('opencode')).toBe(oc);
     set.stop();
+  });
+});
+
+describe.skipIf(!HAS_SQLITE)('createOpencodeSource: banco que ainda não existe no boot (OC-08)', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('o banco aparece depois: as sessões entram em um re-check mais um ciclo, sem log', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout', 'clearInterval', 'clearTimeout'] });
+    setQuiet(false);
+    const spies = (['log', 'warn', 'error'] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
+    const t = tempDir();
+    cleanups.push(t.cleanup);
+    const d = deps();
+    const src = createOpencodeSource({ opencode: true, opencodeDir: t.dir }, { ...d, watch: false })!;
+    cleanups.push(() => src.stop());
+    await src.start();
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(d.office.commit().snapshot.agents).toEqual([]);
+    const fx = buildOpencodeDb({ dir: t.dir });
+    cleanups.push(() => fx.db.close());
+    fx.addSession({ id: ocId('ses', 7), directory: '/p/a', updated: Date.now() });
+    await vi.advanceTimersByTimeAsync(5_000 + 1_000);
+    expect(d.office.commit().snapshot.agents.map((a) => a.id)).toContain(`opencode:${ocId('ses', 7)}`);
+    expect(src.sources()).toHaveLength(1);
+    for (const s of spies) expect(s).not.toHaveBeenCalled();
+  });
+
+  it('stop() limpa o timer de espera', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout', 'clearInterval', 'clearTimeout'] });
+    const t = tempDir();
+    cleanups.push(t.cleanup);
+    const src = createOpencodeSource({ opencode: true, opencodeDir: t.dir }, { ...deps(), watch: false })!;
+    await src.start();
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    src.stop();
+    expect(vi.getTimerCount()).toBe(0);
+    const fx = buildOpencodeDb({ dir: t.dir });
+    cleanups.push(() => fx.db.close());
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(src.sources()).toEqual([]);
+  });
+
+  it('sem node:sqlite: uma linha no log e não fica esperando o arquivo', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'setTimeout', 'clearInterval', 'clearTimeout'] });
+    setQuiet(false);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fx = buildOpencodeDb();
+    cleanups.push(fx.cleanup);
+    const src = createOpencodeSource(
+      { opencode: true, opencodeDir: fx.dir },
+      {
+        ...deps(),
+        watch: false,
+        importer: async () => {
+          throw new Error('sem sqlite');
+        },
+      },
+    )!;
+    cleanups.push(() => src.stop());
+    await src.start();
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

@@ -38,6 +38,8 @@ export interface OpencodeSourceOptions {
   watch?: boolean;
   /** Troca do import de node:sqlite (testes). */
   importer?: OpenOptions['importer'];
+  /** De quanto em quanto tempo conferir se o opencode.db já existe (padrão 5 s). */
+  waitMs?: number;
 }
 
 interface Tracker {
@@ -78,6 +80,8 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
   private timer: ReturnType<typeof setInterval> | null = null;
   private kick: ReturnType<typeof setTimeout> | null = null;
   private watcher: FSWatcher | null = null;
+  private waiter: ReturnType<typeof setInterval> | null = null;
+  private attaching = false;
   private lastPollAt = 0;
   private stopped = false;
   private readonly now: () => number;
@@ -91,12 +95,34 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
    * UMA linha no log e a fonte fica desligada; as outras seguem.
    */
   async start(): Promise<void> {
+    await this.attach();
+    if (!this.db && !this.stopped && !this.unsupported && !this.waiter) {
+      this.waiter = setInterval(() => void this.attach(), this.opts.waitMs ?? 5_000);
+      this.waiter.unref?.();
+    }
+  }
+
+  private unsupported = false;
+
+  private async attach(): Promise<void> {
+    if (this.attaching || this.db || this.stopped) return;
+    this.attaching = true;
+    try {
+      await this.open();
+    } finally {
+      this.attaching = false;
+    }
+  }
+
+  private async open(): Promise<void> {
     const r = await openDb(this.opts.dir, {
       importer: this.opts.importer,
       onError: (e) => log.warnOnce(`opencode-read:${errMsg(e)}`, `OpenCode: falha ao ler o banco (${errMsg(e)}); tentando de novo no próximo ciclo.`),
     });
     if (r === 'missing') return;
     if (r === 'unsupported') {
+      this.unsupported = true;
+      this.clearWaiter();
       log.warn('OpenCode: o banco de sessões precisa do node:sqlite (Node 22.13 ou mais novo); a fonte do disco ficou desligada.');
       return;
     }
@@ -104,6 +130,7 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
       r.close();
       return;
     }
+    this.clearWaiter();
     this.db = r;
     this.registerAccount();
     this.opts.office.beginBoot();
@@ -117,8 +144,14 @@ export class OpencodeSource implements AgentSource, OpencodeLive {
     if (this.opts.watch ?? true) this.watchWal();
   }
 
+  private clearWaiter(): void {
+    if (this.waiter) clearInterval(this.waiter);
+    this.waiter = null;
+  }
+
   stop(): void {
     this.stopped = true;
+    this.clearWaiter();
     if (this.timer) clearInterval(this.timer);
     if (this.kick) clearTimeout(this.kick);
     this.timer = null;
