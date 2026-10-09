@@ -19,6 +19,12 @@
 //    próprio pedido do OpenCode, que já está na tela dele. Nunca responde "always". A resposta vai pelo cliente do
 //    plugin (v1: postSessionIdPermissionsPermissionId); se ele não tiver esse método, por POST /permission/{id}/reply
 //    pelo mesmo cliente ou pela URL base dele; se nada disso existir, o pedido segue no OpenCode.
+// 4. entrega as mensagens do escritório ("Mandar mensagem"): a cada ~1,5 s pergunta a POST /api/opencode/bridge/poll
+//    ({session}) pelas mensagens de cada sessão que ESTE plugin serve (as que viu nos eventos e nas ferramentas e as da
+//    lista do próprio cliente; nunca uma sessão que não é dele), entrega cada uma com
+//    client.session.promptAsync({path: {id}, body: {parts: [{type: 'text', text}]}}) e confirma em
+//    POST /api/opencode/bridge/ack. A busca também é o sinal de "plugin conectado" do escritório. O timer não segura o
+//    processo (unref), erros são engolidos, Habblaud fora do ar só espaça as buscas e server.instance.disposed a encerra.
 // Só fala com 127.0.0.1 (e com o servidor do próprio OpenCode, para responder). HABBLAUD_HOOK_DEBUG=1 escreve o que
 // acontece no stderr.
 import { readFileSync } from 'node:fs';
@@ -51,6 +57,21 @@ const MAX_STRING = 1_000;
 const MAX_ITEMS = 100;
 /** Campos dos argumentos de uma ferramenta que servem de título curto (o primeiro que existir). */
 const TITLE_FIELDS = ['filePath', 'file_path', 'path', 'pattern', 'command', 'url', 'query', 'description'];
+
+/** Busca das mensagens do escritório: de quanto em quanto tempo, e quantas sessões no máximo (as mais recentes). */
+const POLL_MS = 1_500;
+const MAX_SESSIONS = 20;
+/** Habblaud fora do ar: espera isto antes de perguntar de novo. */
+const BACKOFF_MS = 10_000;
+/** Prazos: a busca (o Habblaud responde na hora), a lista de sessões do cliente e o promptAsync (o servidor desiste em 20 s). */
+const POLL_TIMEOUT_MS = 2_000;
+const LIST_TIMEOUT_MS = 3_000;
+const DELIVER_TIMEOUT_MS = 15_000;
+const LIST_EVERY_MS = 30_000;
+/** Mensagens por busca e tamanho máximo da mensagem (o servidor já limita em 20.000). */
+const MAX_BATCH = 5;
+const MAX_TEXT = 20_000;
+const MESSAGE_ID_RE = /^[A-Za-z0-9_-]{1,300}$/;
 
 const debug = process.env.HABBLAUD_HOOK_DEBUG === '1' ? (msg) => process.stderr.write(`[habblaud-opencode] ${msg}\n`) : () => {};
 const isObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -229,6 +250,27 @@ async function decide(client, perm, cwd) {
   }
 }
 
+/** Resolve com o resultado de `p` ou, passado `ms`, com `fallback` (o timer não segura o processo). Rejeita se `p` rejeitar. */
+function within(p, ms, fallback) {
+  let timer;
+  return Promise.race([Promise.resolve(p), new Promise((ok) => (timer = setTimeout(() => ok(fallback), ms)))]).finally(() => {
+    clearTimeout(timer);
+  });
+}
+
+/** Entrega o texto à sessão pelo cliente do plugin: {ok: true} ou {ok: false, error}. Nunca lança. */
+async function deliver(client, sessionID, text) {
+  try {
+    if (typeof client?.session?.promptAsync !== 'function') return { ok: false, error: 'o OpenCode desta sessão não oferece session.promptAsync' };
+    const r = await within(client.session.promptAsync({ path: { id: sessionID }, body: { parts: [{ type: 'text', text }] } }), DELIVER_TIMEOUT_MS, 'timeout');
+    if (r === 'timeout') return { ok: false, error: 'o OpenCode não respondeu ao promptAsync a tempo' };
+    return failed(r) ? { ok: false, error: 'o OpenCode recusou a mensagem' } : { ok: true };
+  } catch (err) {
+    debug(`promptAsync: ${err?.message ?? err}`);
+    return { ok: false, error: String(err?.message ?? 'erro ao entregar').slice(0, 300) };
+  }
+}
+
 export const HabblaudPlugin = async ({ client, directory } = {}) => {
   const seen = new Set();
   let queue = Promise.resolve();
@@ -249,9 +291,72 @@ export const HabblaudPlugin = async ({ client, directory } = {}) => {
       });
   };
 
+  // Sessões que este plugin serve (as mais recentes por último): só delas ele busca e entrega mensagens.
+  const owned = new Map();
+  const own = (id) => {
+    if (typeof id !== 'string' || !SESSION_ID_RE.test(id)) return;
+    owned.delete(id);
+    owned.set(id, Date.now());
+    while (owned.size > MAX_SESSIONS) owned.delete(owned.keys().next().value);
+  };
+  const ownFrom = (p) => {
+    if (!isObject(p)) return;
+    own(p.sessionID);
+    if (isObject(p.info)) own(p.info.id);
+  };
+  let stopped = false;
+  let busy = false;
+  let pausedUntil = 0;
+  let nextListAt = 0;
+  const poller = setInterval(() => {
+    tick().catch(() => {});
+  }, POLL_MS);
+  poller.unref?.();
+  const stop = () => {
+    stopped = true;
+    clearInterval(poller);
+  };
+
+  /** Uma rodada: atualiza a lista de sessões de vez em quando e busca/entrega as mensagens de cada uma. Nunca lança. */
+  async function tick() {
+    if (stopped || busy || Date.now() < pausedUntil) return;
+    busy = true;
+    try {
+      if (Date.now() >= nextListAt) {
+        nextListAt = Date.now() + LIST_EVERY_MS;
+        const r = await within(Promise.resolve().then(() => client?.session?.list?.()), LIST_TIMEOUT_MS, undefined).catch(() => undefined);
+        const rows = Array.isArray(r?.data) ? r.data : Array.isArray(r) ? r : [];
+        for (const row of rows.slice(0, MAX_SESSIONS)) if (isObject(row)) own(row.id);
+      }
+      for (const session of [...owned.keys()]) {
+        if (stopped) return;
+        const { port } = readConfig();
+        const r = await call(port, 'POST', '/api/opencode/bridge/poll', { session }, POLL_TIMEOUT_MS);
+        if (!r) {
+          pausedUntil = Date.now() + BACKOFF_MS; // Habblaud fora do ar: não insiste a cada rodada
+          return;
+        }
+        const list = r.status === 200 && Array.isArray(r.json?.messages) ? r.json.messages.slice(0, MAX_BATCH) : [];
+        const results = [];
+        for (const m of list) {
+          if (!isObject(m) || typeof m.id !== 'string' || !MESSAGE_ID_RE.test(m.id) || typeof m.text !== 'string' || !m.text.trim() || m.text.length > MAX_TEXT) continue;
+          results.push({ id: m.id, ...(await deliver(client, session, m.text)) });
+        }
+        if (results.length) await call(port, 'POST', '/api/opencode/bridge/ack', { session, results }, POLL_TIMEOUT_MS);
+      }
+    } catch (err) {
+      debug(`busca: ${err?.message ?? err}`);
+    } finally {
+      busy = false;
+    }
+  }
+
   return {
     event: async (input) => {
       try {
+        const type = input?.event?.type;
+        if (type === 'server.instance.disposed' || type === 'global.disposed') return stop();
+        ownFrom(input?.event?.properties);
         post(observed(input?.event));
         const perm = permissionOf(input?.event);
         if (perm && !seen.has(perm.id)) {
@@ -266,6 +371,7 @@ export const HabblaudPlugin = async ({ client, directory } = {}) => {
     'tool.execute.before': async (input, output) => {
       try {
         if (!isObject(input) || typeof input.sessionID !== 'string' || typeof input.tool !== 'string') return;
+        own(input.sessionID);
         const properties = { sessionID: input.sessionID, tool: input.tool.slice(0, 80), callID: typeof input.callID === 'string' ? input.callID.slice(0, 80) : undefined };
         const title = titleOf(output?.args);
         if (title) properties.title = title;
@@ -277,6 +383,7 @@ export const HabblaudPlugin = async ({ client, directory } = {}) => {
     'tool.execute.after': async (input) => {
       try {
         if (!isObject(input) || typeof input.sessionID !== 'string' || typeof input.tool !== 'string') return;
+        own(input.sessionID);
         post({ type: 'tool.execute.after', properties: { sessionID: input.sessionID, tool: input.tool.slice(0, 80), callID: typeof input.callID === 'string' ? input.callID.slice(0, 80) : undefined } });
       } catch (err) {
         debug(`erro: ${err?.message ?? err}`);
