@@ -84,7 +84,9 @@ function isMessagesPath(path: string): boolean {
     path === '/api/mod/inbox' ||
     path === '/api/mod/inbox/ack' ||
     path === '/api/codex/bridge/poll' ||
-    path === '/api/codex/bridge/ack'
+    path === '/api/codex/bridge/ack' ||
+    path === '/api/opencode/bridge/poll' ||
+    path === '/api/opencode/bridge/ack'
   );
 }
 
