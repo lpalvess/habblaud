@@ -1,4 +1,4 @@
-// Ferramentas do terminal somente leitura: busca na conversa (casamentos sem diferenciar maiúsculas nem acentos,
+// Ferramentas do terminal: busca na conversa (casamentos sem diferenciar maiúsculas nem acentos,
 // navegação com contador "3/17"), filtro "Tudo / Só prompts / Sem ferramentas" e o texto copiado de cada entrada.
 // As funções do modelo são puras e testadas em ui/termtools.test.ts. O destaque dos resultados troca nós de texto
 // por spans criados com createElement/textContent: nenhum texto do transcript passa por innerHTML.

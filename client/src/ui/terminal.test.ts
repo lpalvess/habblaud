@@ -3,6 +3,7 @@ import type { AgentInfo, ShellJob, TerminalEntry } from '../../../shared/types';
 import {
   diffLineKind,
   entryKey,
+  footerGlyph,
   entryTimeTitle,
   moreLabel,
   parseAppend,
@@ -13,6 +14,7 @@ import {
   sessionProjectName,
   sessionTerminalUrl,
   showToolInput,
+  spinnerFrames,
   splitPreview,
   splitToolTitle,
   TerminalLog,
@@ -264,5 +266,17 @@ describe('utilitários', () => {
     expect(entryTimeTitle(new Date(2026, 9, 8, 14, 30, 5).getTime(), now)).toMatch(/14:30:05/);
     expect(entryTimeTitle(new Date(2026, 9, 6, 9, 5).getTime(), now)).toMatch(/06.*09:05/);
     expect(entryTimeTitle(NaN, now)).toBe('');
+  });
+});
+
+describe('rodapé do Codex', () => {
+  it('spinner e símbolo neutros (o ✻ é do Claude Code); o resto é igual', () => {
+    expect(spinnerFrames('claude')).toContain('✻');
+    expect(spinnerFrames('codex')).not.toContain('✻');
+    expect(spinnerFrames('codex')).toHaveLength(spinnerFrames('claude').length);
+    expect(footerGlyph('working', 'claude')).toBe('✻');
+    expect(footerGlyph('working', 'codex')).toBe('•');
+    expect(footerGlyph('waiting', 'codex')).toBe('✋');
+    expect(footerGlyph('ended', 'claude')).toBe('■');
   });
 });

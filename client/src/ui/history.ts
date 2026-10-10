@@ -1,13 +1,15 @@
 // Histórico de sessões (popover aberto pelo botão da barra superior): as sessões dos últimos 7 dias de todas as
 // contas (GET /api/sessions/recent), agrupadas por dia, com busca por título, projeto ou conta. Clicar abre a
-// conversa no terminal somente leitura (modo "sessão encerrada"); uma sessão ainda aberta abre o terminal ao vivo
+// conversa no terminal (modo "sessão encerrada"); uma sessão ainda aberta abre o terminal ao vivo
 // do agente. Só existe com o terminal ligado (acesso local). O agrupamento, a busca e a validação da resposta são
-// puros e testados em ui/history.test.ts; a montagem usa só textContent.
+// puros e testados em ui/history.test.ts; a montagem usa só textContent. Sessões do Codex vêm com o selo "Codex" e a
+// busca acha "codex".
 import type { RecentSession } from '../../../shared/types';
 import type { UiComponent, UiContext } from './context';
 import { h, iconButton, setAttr, setHidden, setText, setTitle } from './dom';
 import { calendarDayDiff, formatClock, formatDateTime, normalizeSearch, plural, shortPath } from './format';
 import { ICONS } from './icons';
+import { isCodex } from './provider';
 import { sessionProjectName, TERMINAL_UNAVAILABLE_HINT, type TerminalControl } from './terminal';
 import { createAccountChip, updateAccountChip } from './widgets';
 
@@ -44,6 +46,8 @@ export function parseRecentSessions(raw: unknown): RecentSession[] {
     const title = str(o.title);
     const firstAt = num(o.firstAt);
     const agentId = str(o.agentId);
+    // Ausente = Claude Code (nunca grava 'claude').
+    if (o.provider === 'codex') s.provider = 'codex';
     if (project) s.project = project;
     if (title) s.title = title;
     if (firstAt !== undefined) s.firstAt = firstAt;
@@ -53,12 +57,15 @@ export function parseRecentSessions(raw: unknown): RecentSession[] {
   return out.sort((a, b) => b.lastAt - a.lastAt);
 }
 
-/** Busca no histórico: título, projeto (nome ou caminho) e nome/letra da conta, sem diferenciar maiúsculas nem acentos. */
+/**
+ * Busca no histórico: título, projeto (nome ou caminho), nome/letra da conta e a ferramenta ("codex"), sem diferenciar
+ * maiúsculas nem acentos.
+ */
 export function filterSessions(list: readonly RecentSession[], query: string, accountLabel: (id: string) => string = (id) => id): RecentSession[] {
   const terms = normalizeSearch(query).split(/\s+/).filter(Boolean);
   if (!terms.length) return list.slice();
   return list.filter((s) => {
-    const hay = normalizeSearch([s.title ?? '', s.project ?? '', s.projectDir, accountLabel(s.account)].join(' '));
+    const hay = normalizeSearch([s.title ?? '', s.project ?? '', s.projectDir, accountLabel(s.account), isCodex(s) ? 'Codex' : ''].join(' '));
     return terms.every((t) => hay.includes(t));
   });
 }
@@ -173,7 +180,7 @@ export class HistoryPopover implements UiComponent {
       'div',
       { class: 'ui-popover ui-hist', role: 'dialog', tabIndex: -1, attrs: { 'aria-label': 'Histórico de sessões', id: 'ui-history', popover: 'auto' } },
       h('div', { class: 'ui-popover__head' }, h('h2', { text: 'Histórico de sessões' }), close),
-      h('p', { class: 'ui-hist__hint', text: 'Últimos 7 dias, de todas as contas. Clique para ler a conversa no terminal (somente leitura).' }),
+      h('p', { class: 'ui-hist__hint', text: 'Últimos 7 dias, de todas as contas. Clique para ler a conversa no terminal.' }),
       h('label', { class: 'ui-search ui-hist__search' }, searchIcon, this.input),
       this.stateEl,
       this.listEl,
@@ -304,20 +311,27 @@ export class HistoryPopover implements UiComponent {
   private item(s: RecentSession, now: number): HTMLButtonElement {
     const account = this.ctx.account(s.account);
     const chip = createAccountChip('sm');
-    updateAccountChip(chip, account, s.account);
+    updateAccountChip(chip, account, s.account, s.provider);
     const title = s.title?.trim() || 'Sessão sem título';
     const project = sessionProjectName(s);
     const live = s.open && !!s.agentId && !!this.ctx.agent(s.agentId);
-    const meta = h('span', { class: 'ui-hist__meta' }, h('span', { class: 'ui-hist__project', text: project }), h('span', { class: 'ui-hist__time', text: formatClock(s.lastAt, false) }));
+    const codex = isCodex(s);
+    const meta = h(
+      'span',
+      { class: 'ui-hist__meta' },
+      codex ? h('span', { class: 'ui-prov ui-prov--xs', text: 'Codex' }) : null,
+      h('span', { class: 'ui-hist__project', text: project }),
+      h('span', { class: 'ui-hist__time', text: formatClock(s.lastAt, false) }),
+    );
     if (live) meta.append(h('span', { class: 'ui-hist__live', text: 'aberta' }));
     const btn = h('button', { class: `ui-hist__item${live ? ' is-live' : ''}`, type: 'button' }, chip, h('span', { class: 'ui-hist__text' }, h('span', { class: 'ui-hist__title', text: title }), meta));
     btn.dataset.session = `${s.account}:${s.sessionId}`;
     const when = s.firstAt !== undefined && calendarDayDiff(s.firstAt, s.lastAt) !== 0 ? `${formatDateTime(s.firstAt)} → ${formatDateTime(s.lastAt)}` : s.firstAt !== undefined ? `${formatDateTime(s.firstAt)} → ${formatClock(s.lastAt, false)}` : formatDateTime(s.lastAt);
     setTitle(
       btn,
-      [title, shortPath(s.project ?? s.projectDir), `${account?.name ?? s.account} · ${when} · ${formatSize(s.size)}`, live ? 'Ainda aberta: abre o terminal ao vivo do agente' : 'Encerrada: abre a conversa no terminal (somente leitura)'].join('\n'),
+      [title, shortPath(s.project ?? s.projectDir), `${account?.name ?? s.account}${codex ? ' (Codex)' : ''} · ${when} · ${formatSize(s.size)}`, live ? 'Ainda aberta: abre o terminal ao vivo do agente' : 'Encerrada: abre a conversa no terminal'].join('\n'),
     );
-    setAttr(btn, 'aria-label', `${title}, ${project}, ${account?.name ?? s.account}, ${live ? 'aberta' : `última atividade ${dayLabel(s.lastAt, now).toLowerCase()} às ${formatClock(s.lastAt, false)}`}`);
+    setAttr(btn, 'aria-label', `${title}, ${project}, ${account?.name ?? s.account}${codex ? ', Codex' : ''}, ${live ? 'aberta' : `última atividade ${dayLabel(s.lastAt, now).toLowerCase()} às ${formatClock(s.lastAt, false)}`}`);
     btn.addEventListener('click', () => {
       this.hide();
       this.terminal.openSession(s, this.button);

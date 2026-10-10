@@ -2,7 +2,7 @@
 import type { UiComponent, UiContext } from './context';
 import { h, prefersReducedMotion, setHidden, setText } from './dom';
 import { FALLBACK_MARK } from './icons';
-import { shortcutHint } from './model';
+import { emptyOfficeHint } from './provider';
 import { wordmark } from './widgets';
 
 /** Depois de quanto tempo sem conexão o aviso aparece. */
@@ -63,7 +63,7 @@ export function officeIsEmpty(ctx: UiContext): boolean {
   const { store } = ctx;
   const snap = store.snapshot;
   const connected = store.connection === 'open' || store.connection === 'mock';
-  // No timelapse, um momento sem ninguém não é "abra o Claude Code".
+  // No timelapse, um momento sem ninguém não é "abra o Claude Code (ou o Codex)".
   return connected && !store.replaying && !!snap && snap.agents.length === 0 && snap.rooms.length === 0;
 }
 
@@ -107,8 +107,7 @@ export class EmptyState implements UiComponent {
     const show = officeIsEmpty(this.ctx);
     setHidden(this.el, !show);
     if (!show || !snap) return;
-    const keys = shortcutHint(snap.accounts);
-    setText(this.hint, `Abra o Claude Code em qualquer projeto${keys ? ` (${keys})` : ''} e veja seu agente chegar.`);
+    setText(this.hint, emptyOfficeHint(snap.accounts));
     this.demoBtn.disabled = this.busy;
     setHidden(this.demoBtn, store.mock);
   }

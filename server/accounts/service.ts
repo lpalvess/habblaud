@@ -1,16 +1,33 @@
 // Contas observadas + uso de cada uma: tap de statusline (recomendado) e cache do /usage
 // gravado no .claude.json. Só arquivos locais: nada de credenciais nem chamadas de rede.
+//
+// As contas do Claude Code saem dos config dirs (detectAccounts). As de outras ferramentas (Codex) chegam de fora,
+// descobertas pela fonte delas (setProviderAccounts), com ids únicos entre todas as contas; o uso delas também é
+// empurrado pela fonte (setUsage), ao lado do statusline e do cache do /usage do Claude Code.
 import { basename, resolve } from 'node:path';
-import type { AccountInfo } from '../../shared/types';
+import type { AccountInfo, AccountUsage, Provider } from '../../shared/types';
 import { log } from '../log';
 import { detectAccounts, type DetectedAccount } from './detect';
 import { StatuslineUsageReader, type StatuslineUsage } from './statusline';
-import { usageFromCache, UsageStore, type UsageView } from './usage';
+import { usageFromCache, UsageStore, type UsageSource, type UsageView } from './usage';
 
 export interface AccountEntry {
   id: string;
+  /** Ferramenta da conta. */
+  provider: Provider;
   /** Config dir lido por este processo (no Docker, o caminho montado). */
   dir: string;
+  detected: DetectedAccount;
+}
+
+/** Conta de outra ferramenta (ex.: um CODEX_HOME), descoberta pela fonte dela. */
+export interface ProviderAccountInput {
+  /** Pasta lida por este processo (no Docker, o caminho montado). */
+  dir: string;
+  /**
+   * Metadados para exibição. `id` é o desejado (ex.: ".codex"): se outra conta já usa esse id, ganha "~2", "~3"...
+   * (o id final volta em setProviderAccounts). `provider` é preenchido pelo serviço.
+   */
   detected: DetectedAccount;
 }
 
@@ -30,7 +47,10 @@ export interface AccountsServiceOptions {
 
 export class AccountsService {
   readonly usage = new UsageStore();
+  /** Contas do Claude Code (config dirs). */
   private list_: AccountEntry[] = [];
+  /** Contas das outras ferramentas, por ferramenta (setProviderAccounts). */
+  private external = new Map<Provider, AccountEntry[]>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private statuslineTimer: ReturnType<typeof setInterval> | null = null;
   private readonly statusline: StatuslineUsageReader | null;
@@ -54,7 +74,7 @@ export class AccountsService {
       log.warnOnce('detect-accounts', `Falha ao detectar contas: ${String(err).slice(0, 120)}`);
       return;
     }
-    const next = this.opts.dirs.map((dir, i) => ({ id: detected[i].id, dir, detected: detected[i] }));
+    const next = this.opts.dirs.map((dir, i): AccountEntry => ({ id: detected[i].id, provider: 'claude', dir, detected: detected[i] }));
     let changed = JSON.stringify(next.map((e) => ({ ...e.detected, cachedUsage: undefined }))) !==
       JSON.stringify(this.list_.map((e) => ({ ...e.detected, cachedUsage: undefined })));
     this.list_ = next;
@@ -102,10 +122,55 @@ export class AccountsService {
     return !!f.accountId && f.accountId === e.id;
   }
 
+  /**
+   * Substitui as contas de uma ferramenta que não é o Claude Code (a fonte dela chama a cada descoberta). Ids
+   * únicos entre todas as contas: um id já usado (por uma conta do Claude Code, de outra ferramenta ou repetido
+   * na lista) ganha "~2", "~3"... na ordem da lista. Devolve as entradas com os ids finais, na mesma ordem: são
+   * eles que vão em AgentInfo.account. Conta que saiu perde o uso guardado.
+   */
+  setProviderAccounts(provider: Exclude<Provider, 'claude'>, list: readonly ProviderAccountInput[]): readonly AccountEntry[] {
+    const taken = new Set(this.list_.map((e) => e.id));
+    for (const [p, entries] of this.external) if (p !== provider) for (const e of entries) taken.add(e.id);
+    const next = list.map((input): AccountEntry => {
+      const base = input.detected.id || basename(input.dir) || input.dir;
+      let id = base;
+      for (let n = 2; taken.has(id); n++) id = `${base}~${n}`;
+      taken.add(id);
+      return { id, provider, dir: input.dir, detected: { ...input.detected, id, provider } };
+    });
+    const prev = this.external.get(provider) ?? [];
+    let changed = JSON.stringify(prev) !== JSON.stringify(next);
+    for (const e of prev) if (!next.some((n) => n.id === e.id)) changed = this.usage.forget(e.id) || changed;
+    if (next.length) this.external.set(provider, next);
+    else this.external.delete(provider);
+    if (this.usageViewChanged()) changed = true;
+    if (changed) this.opts.onChange();
+    return next;
+  }
+
+  /**
+   * Uso empurrado por uma fonte (ex.: a do Codex, lido dos arquivos de sessão): guardado pela origem
+   * (`usage.source`), ao lado das outras; vale a mais recente (maior fetchedAt). Devolve true se algo mudou.
+   */
+  setUsage(accountId: string, usage: AccountUsage): boolean {
+    const changed = this.usage.set(accountId, usage);
+    const viewChanged = this.usageViewChanged();
+    if (changed || viewChanged) this.opts.onChange();
+    return changed;
+  }
+
+  /** Esquece o uso de uma origem da conta (ex.: a fonte não tem mais números). Devolve true se algo mudou. */
+  clearUsage(accountId: string, source: UsageSource): boolean {
+    const changed = this.usage.clear(accountId, source);
+    const viewChanged = this.usageViewChanged();
+    if (changed || viewChanged) this.opts.onChange();
+    return changed;
+  }
+
   /** O uso exibido mudou (inclusive sozinho, com o tempo: ok -> stale, janelas reiniciam)? */
   private usageViewChanged(): boolean {
     const now = this.now();
-    const sig = JSON.stringify(this.list_.map((e) => this.usage.view(e.id, now)));
+    const sig = JSON.stringify(this.allEntries().map((e) => this.usage.view(e.id, now)));
     if (sig === this.usageSig) return false;
     this.usageSig = sig;
     return true;
@@ -128,27 +193,39 @@ export class AccountsService {
     this.statuslineTimer = null;
   }
 
+  /** Contas do Claude Code (o watcher, o histórico e o statusline são só delas). */
   entries(): readonly AccountEntry[] {
     return this.list_;
   }
 
+  /** Contas de uma ferramenta. */
+  entriesOf(provider: Provider): readonly AccountEntry[] {
+    return provider === 'claude' ? this.list_ : (this.external.get(provider) ?? []);
+  }
+
+  /** Contas de todas as ferramentas: as do Claude Code primeiro. */
+  allEntries(): readonly AccountEntry[] {
+    if (!this.external.size) return this.list_;
+    return [...this.list_, ...[...this.external.values()].flat()];
+  }
+
   idForDir(dir: string): string | undefined {
     const abs = resolve(dir);
-    return this.list_.find((e) => resolve(e.dir) === abs)?.id;
+    return this.allEntries().find((e) => resolve(e.dir) === abs)?.id;
   }
 
   find(id: string): AccountEntry | undefined {
-    return this.list_.find((e) => e.id === id);
+    return this.allEntries().find((e) => e.id === id);
   }
 
   usageView(id: string): UsageView {
     return this.usage.view(id, this.now());
   }
 
-  /** Contas no formato do protocolo; `sessions` = sessões abertas por conta. */
+  /** Contas (de todas as ferramentas) no formato do protocolo; `sessions` = sessões abertas por conta. */
   list(sessions: ReadonlyMap<string, number>): AccountInfo[] {
     const now = this.now();
-    return this.list_.map((e) => {
+    return this.allEntries().map((e) => {
       const d = e.detected;
       const view = this.usage.view(e.id, now);
       const info: AccountInfo = {
@@ -160,6 +237,8 @@ export class AccountsService {
         sessions: sessions.get(e.id) ?? 0,
         usageStatus: view.status,
       };
+      // Ausente = 'claude' (o snapshot das contas do Claude Code não muda).
+      if (e.provider !== 'claude') info.provider = e.provider;
       if (d.email) info.email = d.email;
       if (d.organization) info.organization = d.organization;
       if (d.plan) info.plan = d.plan;

@@ -1,4 +1,4 @@
-// Visão completa do transcript para o terminal somente leitura: converte as linhas JSONL do Claude Code
+// Visão completa do transcript para o terminal: converte as linhas JSONL do Claude Code
 // em TerminalEntry (prompts, respostas, ferramentas e seus resultados), com segredos mascarados e
 // textos truncados. Independente do parser de atividades (transcript.ts): aqui o objetivo é mostrar a
 // conversa como o Claude Code a exibe, não resumir o que o personagem está fazendo.
@@ -121,25 +121,28 @@ function clip(s: string, max: number, maxLines = Infinity): { text: string; trun
   return { text: s.slice(0, end).trimEnd(), truncated: true };
 }
 
-interface Prepared {
+export interface Prepared {
   text: string;
   truncated: boolean;
 }
 
-/** Texto multilinha pronto para exibir: limpo, mascarado, sem linhas vazias nas pontas e cortado. */
-function prepare(raw: string, max: number, maxLines = Infinity, reminders = true): Prepared {
+/**
+ * Texto multilinha pronto para exibir: limpo, mascarado, sem linhas vazias nas pontas e cortado. Também usado pelo
+ * terminal do Codex (sources/codex/terminal.ts), como `marked` e `oneLine`.
+ */
+export function prepare(raw: string, max: number, maxLines = Infinity, reminders = true): Prepared {
   const safe = safeText(raw, max * 2 + 1_024, reminders);
   const c = clip(safe.text.replace(/^(?:[ \t]*\n)+/, '').trimEnd(), max, maxLines);
   return { text: c.text, truncated: c.truncated || safe.cut };
 }
 
 /** Para entradas sem o campo `truncated`: o corte vira uma última linha "…". */
-function marked(p: Prepared): string {
+export function marked(p: Prepared): string {
   return p.truncated && p.text ? `${p.text}\n…` : p.text;
 }
 
 /** Primeira linha não vazia, mascarada e cortada em `max` (com " …" se havia mais linhas). */
-function oneLine(raw: string, max: number, reminders = true): string {
+export function oneLine(raw: string, max: number, reminders = true): string {
   const { text, cut } = safeText(raw, max * 4 + TAIL_GUARD * 2, reminders);
   const lines = text.split('\n');
   const i = lines.findIndex((l) => l.trim());

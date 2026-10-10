@@ -46,8 +46,8 @@ function isLoopbackName(name: string): boolean {
 }
 
 /**
- * Cabeçalho Host local (`localhost`, `*.localhost`, 127.x ou `[::1]`; porta ignorada)? Usado pelo terminal
- * somente leitura, que só atende quem abriu o Habblaud pelo próprio computador: um IP da rede ou um nome
+ * Cabeçalho Host local (`localhost`, `*.localhost`, 127.x ou `[::1]`; porta ignorada)? Usado pelo terminal, pelas
+ * permissões e pelas mensagens, que só atendem quem abriu o Habblaud pelo próprio computador: um IP da rede ou um nome
  * de HABBLAUD_ALLOWED_HOSTS (proxy, túnel) não serve. Ausente ou inválido: false.
  */
 export function isLoopbackHost(host: string | undefined): boolean {

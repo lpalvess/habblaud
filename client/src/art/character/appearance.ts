@@ -1,5 +1,6 @@
 // Geração determinística de aparência a partir de uma semente (puro, sem DOM).
 // `look` apenas enviesa as probabilidades de estilos; nada é exclusivo de um look, exceto barba ('m').
+import { ACCESSORIES, BOTTOM_STYLES, FACIAL_HAIR, HAIR_STYLES, PART_KEYS, TOP_STYLES, type AppearanceParts, type PartKey } from '../../../../shared/appearance';
 import { mulberry32 } from '../../../../shared/hash';
 import type { Accessory, Appearance, HairStyle, TopStyle } from '../api';
 
@@ -88,7 +89,7 @@ function scramble(seed: number): number {
   return (h ^ (h >>> 16)) >>> 0;
 }
 
-export function appearanceFromSeed(seed: number, opts: { look?: 'f' | 'm'; sub?: boolean } = {}): Appearance {
+export function appearanceFromSeed(seed: number, opts: { look?: 'f' | 'm'; sub?: boolean; parts?: AppearanceParts } = {}): Appearance {
   const rnd = mulberry32(scramble(seed));
   const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(rnd() * arr.length) % arr.length];
   const weighted = <T extends string>(w: Weights<T>): T => {
@@ -152,7 +153,7 @@ export function appearanceFromSeed(seed: number, opts: { look?: 'f' | 'm'; sub?:
   // Cabelos raros e grisalhos pedem menos careca/raspado em looks femininos.
   if (look === 'f' && hairStyle === 'bald') hairStyle = 'buzz';
 
-  return {
+  const a: Appearance = {
     skin,
     hair,
     hairStyle,
@@ -169,6 +170,12 @@ export function appearanceFromSeed(seed: number, opts: { look?: 'f' | 'm'; sub?:
     facialHair,
     bottomStyle,
   };
+  // Peças escolhidas no editor (por cima do sorteio, sem mudar a ordem dos sorteios). Um undefined explícito não
+  // apaga a peça sorteada.
+  const parts = opts.parts;
+  if (!parts) return a;
+  const chosen = Object.fromEntries(PART_KEYS.filter((k) => parts[k] !== undefined).map((k) => [k, parts[k]])) as AppearanceParts;
+  return { ...a, ...chosen };
 }
 
 /** Chave estável de uma aparência (para cache de sprites). */
@@ -177,4 +184,67 @@ export function appearanceKey(a: Appearance): string {
     a.skin, a.hair, a.hairStyle, a.eyes, a.top, a.topAccent, a.topStyle, a.bottom, a.shoes, a.accessory,
     a.accessoryColor, a.lanyard ?? '-', a.look, a.facialHair ?? '-', a.bottomStyle ?? '-',
   ].join('|');
+}
+
+// ------------------------------------------------------------------ editor do personagem
+
+const uniq = (list: readonly string[]): readonly string[] => [...new Set(list)];
+const colorsOf = (pairs: readonly (readonly [string, number])[]): string[] => pairs.map(([c]) => c);
+const ACCENTS = uniq([...LIGHT_ACCENTS, ...TOP_COLORS]);
+
+/** Cores da parte de cima e do detalhe para cada estilo: as mesmas que o sorteio usa. */
+function topPalettes(style: TopStyle): { top: readonly string[]; topAccent: readonly string[] } {
+  switch (style) {
+    case 'shirt_tie':
+      return { top: SHIRT_COLORS, topAccent: TIE_COLORS };
+    case 'jacket':
+      return { top: JACKET_COLORS, topAccent: ACCENTS };
+    default:
+      return { top: TOP_COLORS, topAccent: ACCENTS };
+  }
+}
+
+export type EditorOptions = Readonly<Record<PartKey, readonly string[]>>;
+
+/** Opções de cada peça no editor do personagem, conforme a aparência atual (as cores da roupa dependem do estilo). */
+export function editorOptions(a: Appearance): EditorOptions {
+  const top = topPalettes(a.topStyle);
+  return {
+    skin: SKINS,
+    hair: [...colorsOf(HAIR_NATURAL), ...HAIR_FUN],
+    hairStyle: HAIR_STYLES,
+    eyes: uniq(EYES),
+    top: top.top,
+    topAccent: top.topAccent,
+    topStyle: TOP_STYLES,
+    bottom: colorsOf(BOTTOMS),
+    bottomStyle: BOTTOM_STYLES,
+    shoes: colorsOf(SHOES),
+    accessory: ACCESSORIES,
+    accessoryColor: ACC_COLORS[a.accessory],
+    facialHair: FACIAL_HAIR,
+  };
+}
+
+const TALL_HAIR: readonly string[] = ['afro', 'bun', 'mohawk', 'pigtails'];
+const SHORT_HAIR: readonly string[] = ['bald', 'buzz'];
+
+/** Combinação que o sorteio evita (o editor desabilita a opção): devolve o motivo, ou undefined se pode. */
+export function editorConflict(a: Appearance, key: PartKey, value: string): string | undefined {
+  if (key === 'accessory') {
+    if ((value === 'cap' || value === 'beanie') && TALL_HAIR.includes(a.hairStyle)) return 'Não combina com este cabelo';
+    if (value === 'bow' && SHORT_HAIR.includes(a.hairStyle)) return 'Não combina com este cabelo';
+  }
+  if (key === 'hairStyle') {
+    if ((a.accessory === 'cap' || a.accessory === 'beanie') && TALL_HAIR.includes(value)) return 'Não combina com o boné ou o gorro';
+    if (a.accessory === 'bow' && SHORT_HAIR.includes(value)) return 'Não combina com o laço';
+  }
+  return undefined;
+}
+
+/** Depois de trocar um estilo: cores que não existem na paleta nova caem na primeira dela. */
+export function fitToOptions(a: Appearance): Appearance {
+  const o = editorOptions(a);
+  const fit = (v: string, list: readonly string[]): string => (list.includes(v) ? v : list[0]);
+  return { ...a, top: fit(a.top, o.top), topAccent: fit(a.topAccent, o.topAccent), accessoryColor: fit(a.accessoryColor, o.accessoryColor) };
 }

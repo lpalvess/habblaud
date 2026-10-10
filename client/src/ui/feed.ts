@@ -1,4 +1,5 @@
 // Feed de atividade (painel inferior recolhível): últimos eventos do escritório, do mais antigo ao mais recente.
+import { partsKey } from '../../../shared/appearance';
 import type { AgentInfo, FeedItem } from '../../../shared/types';
 import { createAvatar, createAvatarPlaceholder, updateAvatar } from './avatar';
 import type { UiComponent, UiContext } from './context';
@@ -11,7 +12,7 @@ import { createAccountChip, updateAccountChip } from './widgets';
 
 const VISIBLE = 50;
 
-type AgentMeta = Pick<AgentInfo, 'seed' | 'look' | 'kind' | 'account'>;
+type AgentMeta = Pick<AgentInfo, 'seed' | 'look' | 'kind' | 'account' | 'parts'>;
 
 export class FeedPanel implements UiComponent {
   readonly el: HTMLElement;
@@ -90,7 +91,9 @@ export class FeedPanel implements UiComponent {
   render(): void {
     for (const a of this.ctx.store.snapshot?.agents ?? []) {
       const m = this.meta.get(a.id);
-      if (!m || m.seed !== a.seed || m.account !== a.account) this.meta.set(a.id, { seed: a.seed, look: a.look, kind: a.kind, account: a.account });
+      if (!m || m.seed !== a.seed || m.account !== a.account || partsKey(m.parts) !== partsKey(a.parts)) {
+        this.meta.set(a.id, { seed: a.seed, look: a.look, kind: a.kind, account: a.account, parts: a.parts });
+      }
     }
     const open = this.ctx.isPanelOpen('feed');
     const paused = this.hovering || this.scrolledUp;
@@ -211,7 +214,7 @@ export class FeedPanel implements UiComponent {
   private metaFromStore(id: string): AgentMeta | undefined {
     const a = this.ctx.agent(id);
     if (!a) return undefined;
-    const m = { seed: a.seed, look: a.look, kind: a.kind, account: a.account };
+    const m = { seed: a.seed, look: a.look, kind: a.kind, account: a.account, parts: a.parts };
     this.meta.set(id, m);
     return m;
   }

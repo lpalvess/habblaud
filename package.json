@@ -1,6 +1,6 @@
 {
   "name": "habblaud",
-  "version": "0.4.0",
+  "version": "0.8.0",
   "private": true,
   "description": "Escritório virtual animado que mostra, em tempo real, o que seus agentes do Claude Code estão fazendo.",
   "license": "MIT",
@@ -36,6 +36,10 @@
     "mod:install": "tsx scripts/mod-install.ts install",
     "mod:uninstall": "tsx scripts/mod-install.ts uninstall",
     "mod:status": "tsx scripts/mod-install.ts status",
+    "codex:install": "tsx scripts/codex-install.ts install",
+    "codex:uninstall": "tsx scripts/codex-install.ts uninstall",
+    "codex:status": "tsx scripts/codex-install.ts status",
+    "codex:bridge": "tsx scripts/codex-bridge.ts",
     "release": "tsx scripts/release.ts"
   },
   "devDependencies": {
