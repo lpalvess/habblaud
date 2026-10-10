@@ -8,6 +8,7 @@ import { Office } from '../model/office';
 import { ocId } from '../test/opencode-fixtures';
 import { request, servePermissions, type PermissionServer } from '../test/permission-server';
 import { opencodeToolView } from './opencode';
+import type { PermissionAnswer } from '../../shared/types';
 import { PermissionRegistry, type WaitResult } from './registry';
 
 setQuiet(true);
@@ -276,5 +277,17 @@ describe('perguntas do OpenCode no registro de permissões (OQ-10, OQ-11, OQ-16)
     expect(v).toMatchObject({ icon: '❓', questions: [{ index: 0, options: [{ index: 0, label: 'Sim' }] }] });
     expect(JSON.stringify(v)).not.toContain('abcdef123456');
     for (const input of [{}, { questions: 'x' }, { questions: [1, null] }]) expect(() => opencodeToolView('AskUserQuestion', input as Record<string, unknown>)).not.toThrow();
+  });
+});
+
+// O corpo é o que client/src/ui/permission.ts (buildAnswers) monta para este cartão; o teste do cartão
+// (client/src/ui/permission-card.test.ts, "contrato") exige o mesmo literal. Mexer num sem o outro quebra um dos dois.
+describe('contrato cliente x servidor: a resposta que o cartão monta é a que o registro aceita (pergunta do OpenCode)', () => {
+  it('o corpo {behavior:"answer", answers} no formato do buildAnswers resolve como "decided"/"answer"', async () => {
+    const { registry } = setup();
+    const id = idOf(registry.register(ask()));
+    const answers: PermissionAnswer[] = [{ question: 0, options: [1] }, { question: 1, options: [0], other: 'lint' }];
+    expect(registry.decide(id, { behavior: 'answer', answers })).toBe('ok');
+    expect(await result(registry, id)).toEqual({ status: 'decided', behavior: 'answer', answers });
   });
 });
