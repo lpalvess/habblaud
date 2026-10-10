@@ -1,6 +1,6 @@
 // Rotas de /api/permissions: a trava (desligado / Host que não é local), o guard (JSON e Origin), os
 // status (400, 404, 405, 409), o fluxo completo (registrar → esperar → decidir), o long-poll sem decisão,
-// a resposta imediata sem páginas abertas e os pedidos fictícios do demo.
+// a resposta imediata sem páginas abertas, as perguntas do AskUserQuestion e os pedidos fictícios do demo.
 import { afterEach, describe, expect, it } from 'vitest';
 import type { OfficeSnapshot, PermissionRequestInfo } from '../../shared/types';
 import { setQuiet } from '../log';
@@ -128,11 +128,66 @@ describe('rotas', () => {
     expect((await request(srv.base, `/api/permissions/${id}/wait?timeout=0.1`)).json).toEqual({ status: 'released', reason: 'orphan' });
   });
 
+  it('pergunta (AskUserQuestion): responder pela rota entrega as respostas ao hook; respostas que não servem: 400', async () => {
+    srv = await servePermissions();
+    const questions = [
+      { question: 'Qual banco usar?', header: 'Banco', options: [{ label: 'Postgres' }, { label: 'SQLite' }] },
+      { question: 'Quais testes rodar?', multiSelect: true, options: [{ label: 'Unidade' }, { label: 'E2E' }] },
+    ];
+    const reg = await register(srv, { tool_name: 'AskUserQuestion', tool_input: { questions }, permission_suggestions: [] });
+    expect(reg.status).toBe(201);
+    const { id } = reg.json as { id: string };
+    const agent = ((await request(srv.base, '/api/snapshot')).json as OfficeSnapshot).agents.find((a) => a.id === MAIN)!;
+    expect(agent).toMatchObject({ status: 'waiting', waitingFor: 'responder uma pergunta', permission: { id, tool: 'AskUserQuestion' } });
+    expect(agent.permission!.questions!.map((q) => q.question)).toEqual(['Qual banco usar?', 'Quais testes rodar?']);
+
+    const decide = (body: unknown) => request(srv!.base, `/api/permissions/${id}/decision`, { method: 'POST', body });
+    for (const body of [{ behavior: 'answer' }, { behavior: 'answer', answers: [{ question: 0, options: [0, 0] }] }]) {
+      const r = await decide(body);
+      expect(r.status).toBe(400);
+      expect(r.json).toMatchObject({ error: expect.stringMatching(/answer/) });
+    }
+    const allow = await decide({ behavior: 'allow' });
+    expect(allow.status).toBe(400);
+    expect(allow.json).toMatchObject({ error: expect.stringMatching(/^resposta que não serve/) });
+    expect((await decide({ behavior: 'answer', answers: [{ question: 0, options: [1] }] })).status).toBe(400);
+
+    const waiting = request(srv.base, `/api/permissions/${id}/wait?timeout=20`);
+    await new Promise((ok) => setTimeout(ok, 50));
+    expect((await decide({ behavior: 'answer', answers: [{ question: 0, options: [1] }, { question: 1, options: [0], other: 'lint' }] })).status).toBe(200);
+    expect((await waiting).json).toEqual({
+      status: 'decided',
+      behavior: 'answer',
+      answers: [
+        { question: 0, options: [1] },
+        { question: 1, options: [0], other: 'lint' },
+      ],
+    });
+  });
+
+  it('demo: a pergunta fictícia responde pela mesma rota (e aprovar não serve)', async () => {
+    srv = await servePermissions({ demo: true });
+    const sim = (srv.office as unknown as { demo: { forcePermission(now: number, kind?: string): string | undefined } }).demo;
+    const agentId = sim.forcePermission(Date.now(), 'question');
+    srv.office.tick();
+    const p = ((await request(srv.base, '/api/snapshot')).json as OfficeSnapshot).agents.find((a) => a.id === agentId)!.permission!;
+    expect(p.tool).toBe('AskUserQuestion');
+    const decide = (body: unknown) => request(srv!.base, `/api/permissions/${encodeURIComponent(p.id)}/decision`, { method: 'POST', body });
+    expect((await decide({ behavior: 'allow' })).status).toBe(400);
+    expect((await decide({ behavior: 'answer', answers: [{ question: 0, options: [0] }] })).status).toBe(400);
+    const [single, multi] = p.questions!;
+    expect((await decide({ behavior: 'answer', answers: [{ question: single!.index, options: [0] }, { question: multi!.index, options: [0, 1] }] })).status).toBe(200);
+    const after = ((await request(srv.base, '/api/snapshot')).json as OfficeSnapshot).agents.find((a) => a.id === agentId)!;
+    expect(after.permission).toBeUndefined();
+    expect(after.status).toBe('working');
+    expect(after.recent.at(-1)).toMatchObject({ icon: '💬', text: 'Respondido no Habblaud' });
+  });
+
   it('demo: o pedido fictício responde pela mesma rota', async () => {
     srv = await servePermissions({ demo: true });
     // Algum agente do demo pede permissão agora.
-    const sim = (srv.office as unknown as { demo: { forcePermission(now: number): string | undefined } }).demo;
-    const agentId = sim.forcePermission(Date.now());
+    const sim = (srv.office as unknown as { demo: { forcePermission(now: number, kind?: string): string | undefined } }).demo;
+    const agentId = sim.forcePermission(Date.now(), 'permission');
     srv.office.tick();
     const snap = (await request(srv.base, '/api/snapshot')).json as OfficeSnapshot;
     const agent = snap.agents.find((a) => a.id === agentId)!;

@@ -1,10 +1,12 @@
-// Ajuda ("?"): legenda de status e ícones, controles, o que o escritório mostra, contas e uso.
+// Ajuda ("?"): legenda de status e ícones, controles, o que o escritório mostra, contas e uso, o Codex e o OpenCode.
 import type { AgentStatus } from '../../../shared/types';
 import type { HelpSection } from './context';
 import { h, iconButton, prefersReducedMotion } from './dom';
 import { ICONS } from './icons';
 import { SHELL_STAGES, STATUS_LABEL } from './model';
-import { createUsageSetup } from './usage';
+import { CODEX_LIVE_HINT } from './provider';
+import { createUsageSetup, richText } from './usage';
+import { createAccountChip, updateAccountChip } from './widgets';
 
 const STATUS_HELP: [AgentStatus, string][] = [
   ['working', 'Na mesa, digitando: está processando um pedido.'],
@@ -53,6 +55,30 @@ const GITHUB_HELP: [string, string][] = [
   ['🚀', 'Push: só o aviso e o feed, sem mexer na sala.'],
 ];
 
+/** O Codex no escritório: o que muda em relação ao Claude Code (trechos `assim` viram código). */
+export const CODEX_HELP: string[] = [
+  'Cada projeto aberto no Codex (no terminal ou no app) vira uma sala: a mesma do Claude Code naquela pasta, e os dois dividem a sala.',
+  'Os agentes do Codex têm o chip da conta vazado (só a borda na cor da conta) e o selo CODEX na etiqueta e nos detalhes.',
+  `${CODEX_LIVE_HINT} Sem os hooks, o escritório lê os arquivos de sessão do Codex: cada passo aparece quando termina.`,
+  'Aprovar pelo escritório: no Codex, a aprovação só aparece no terminal depois que você responder aqui ou o prazo acabar (alguns segundos). Não há “não perguntar de novo” nem “interromper”, e recusar pede um motivo.',
+  'Mensagens: entram na fila da sessão e viram o próximo prompt quando o Codex terminar o que está fazendo (até ~10 s). Com o Habblaud no Docker, deixe `npm run codex:bridge` rodando; no modo Node funciona sozinho.',
+  'Perguntas do Codex são respondidas no próprio Codex.',
+  'Uso: vem dos arquivos de sessão do Codex, sem instalar nada, e só se renova enquanto alguma sessão roda (por isso o cartão mostra a idade, ex.: “há 12 min”). “sem cota” quer dizer sem cota nem créditos para usar agora.',
+  'Meu dia: o Codex conta tokens, mas não grava custo.',
+];
+
+/** O OpenCode no escritório: o que aparece e o que o plugin opcional acrescenta (trechos `assim` viram código). */
+export const OPENCODE_HELP: string[] = [
+  'Cada projeto aberto no OpenCode vira uma sala (a pasta da sessão), e cada sessão é um personagem com o selo OpenCode na etiqueta e nos detalhes. Subagentes do OpenCode chegam como colegas na mesma sala.',
+  'Sem instalar nada, o escritório lê o banco do OpenCode, só para leitura: aparecem as sessões, o que cada uma está fazendo e as tarefas. As perguntas do OpenCode também aparecem no cartão, na próxima leitura.',
+  'Para ver o OpenCode ao vivo, aprovar e mandar mensagens pelo escritório, instale o plugin opcional: `npm run opencode:install` e depois reinicie o OpenCode (ele só carrega o plugin ao abrir). Depois de atualizar o Habblaud, rode o comando de novo.',
+  'Aprovar pelo escritório: com a página do Habblaud aberta, o pedido de permissão aparece no cartão e espera a sua resposta por alguns segundos. Você pode aprovar ou recusar (recusar pede um motivo). Se ninguém responder, vale o pedido na tela do OpenCode. Não há “sempre permitir” nem “interromper”.',
+  'Perguntas: o cartão mostra a pergunta e as opções, e dá para responder ou recusar daqui (precisa do plugin). Se ninguém responder aqui, ou você escolher “Responder no terminal”, vale o prompt do OpenCode.',
+  'Mensagens: a caixa “Mandar mensagem” entrega ao agente principal da sessão, pelo plugin. Sem o plugin, a caixa mostra a dica de instalação.',
+  'Privacidade: o Habblaud lê só as tabelas de projetos, sessões, mensagens (papel, horário e ferramenta usada), partes e tarefas do banco, mais as perguntas feitas ao usuário. Nunca lê as credenciais, a configuração nem os logs do OpenCode.',
+  'Uso (cotas): o OpenCode não informa, então não há cartão de uso para ele.',
+];
+
 /** O fim da espera (o servidor marca com uma atividade ✅ ou ❌). */
 const SHELL_END_HELP: [string, string][] = [
   ['🎉', 'Terminou bem: levanta, comemora com confete e uma estrela.'],
@@ -60,17 +86,17 @@ const SHELL_END_HELP: [string, string][] = [
 ];
 
 const INTRO =
-  'Cada projeto aberto no Claude Code vira uma sala, e cada sessão aberta é um personagem com nome próprio. ' +
+  'Cada projeto aberto no Claude Code, no Codex ou no OpenCode vira uma sala (quem trabalha no mesmo projeto divide a sala), e cada sessão aberta é um personagem com nome próprio. ' +
   'Subagentes chegam como colegas novos, trabalham na mesma sala e vão embora quando terminam. ' +
   'Quando a última sessão de uma sala é fechada, quem sai apaga a luz e a sala é desmontada.';
 
 const SHORTCUTS: [string[], string][] = [
   [['/'], 'Buscar agente, projeto ou conta'],
   [['F'], 'Seguir o agente selecionado'],
-  [['T'], 'Abrir ou fechar o terminal do agente selecionado (somente leitura)'],
+  [['T'], 'Abrir ou fechar o terminal do agente selecionado'],
   [['Ctrl+F'], 'Com o terminal em foco: buscar na conversa (⌘F no Mac); Enter e Shift+Enter navegam'],
   [['L'], 'Abrir ou fechar o timelapse do dia'],
-  [['P'], 'Ir até o próximo pedido de permissão para responder pelo escritório'],
+  [['P'], 'Ir até o próximo pedido de permissão ou pergunta para responder pelo escritório'],
   [['M'], 'Meu dia: para onde foi o tempo (trabalhando, esperando você...)'],
   [['O', '0'], 'Visão geral do prédio'],
   [['Esc'], 'Fechar a busca do terminal, depois o terminal; depois, a gaveta e a seleção'],
@@ -129,18 +155,23 @@ export class HelpDialog {
             h('li', { text: 'Clique em um personagem ou sala para ver os detalhes; duplo clique aproxima a câmera.' }),
             h('li', { text: 'Passe o mouse sobre um personagem para ver o que ele está fazendo.' }),
             h('li', {
-              text: 'Nos detalhes de um agente, “Abrir terminal” mostra a conversa da sessão como no Claude Code, ao vivo e só para leitura (precisa do acesso local, bind 127.0.0.1).',
+              text: 'Nos detalhes de um agente, “Abrir terminal” mostra a conversa da sessão como no Claude Code (ou no Codex), ao vivo (precisa do acesso local, bind 127.0.0.1).',
+            }),
+            h('li', {
+              text: 'Com o plugin habblaud-mensagens (npm run mod:install), dá para mandar mensagens ao agente principal pelos detalhes dele ou pela caixa no rodapé do terminal: o texto entra na sessão como se você o tivesse digitado. Enter manda, Shift+Enter quebra a linha.',
             }),
             h('li', {
               text: 'No terminal: busca (lupa ou Ctrl/⌘+F), filtro “Tudo / Só prompts / Sem ferramentas” e um botão de copiar em cada entrada. O relógio da barra superior abre o histórico das sessões dos últimos 7 dias, inclusive as já encerradas.',
             }),
             h('li', {
-              text: 'Com o mod do Habblaud instalado (npm run mod:install, que inclui o plugin de permissões), quem “pede permissão” mostra nos detalhes o comando ou a edição e os botões Aprovar, Recusar e Responder no terminal. O diálogo continua no terminal: vale o que você responder primeiro.',
+              text: 'Com o mod do Habblaud instalado (npm run mod:install, que inclui o plugin de permissões), quem “pede permissão” mostra nos detalhes o comando ou a edição e os botões Aprovar, Recusar e Responder no terminal; quem faz uma pergunta mostra as opções (e um “Outro” para escrever) para responder por aqui. O diálogo continua no terminal: vale o que você responder primeiro.',
             }),
           ),
           shortcuts,
         ),
         this.usageSection(),
+        this.codexSection(),
+        this.opencodeSection(),
       ),
     );
     // Clique no fundo (fora do conteúdo) fecha.
@@ -227,7 +258,8 @@ export class HelpDialog {
       h(
         'ul',
         { class: 'ui-help__list' },
-        h('li', { text: 'O chip colorido com a letra (C, D…) mostra de qual conta do Claude é cada agente: cada atalho de terminal usa uma pasta de configuração diferente.' }),
+        h('li', { text: 'O chip colorido com a letra (C, D…) mostra de qual conta do Claude Code é cada agente: cada atalho de terminal usa uma pasta de configuração diferente.' }),
+        h('li', {}, accountSample('C', '#f08a3c'), ' Conta do Claude Code · ', accountSample('X', '#a77bf3', true), ' Conta do Codex (chip vazado, com o selo CODEX onde há espaço).'),
         h('li', {
           text: 'No topo, cada conta mostra o uso da sessão de 5 horas e da semana. O ↻ indica quando cada limite reinicia (contagem regressiva se faltar menos de um dia). Verde abaixo de 50%, âmbar até 80% e vermelho a partir daí.',
         }),
@@ -240,7 +272,39 @@ export class HelpDialog {
     return el;
   }
 
+  /** O Codex no escritório (o "Como funciona" do cartão de uso de uma conta do Codex abre aqui). */
+  private codexSection(): HTMLElement {
+    const el = h(
+      'section',
+      { class: 'ui-help__usage', attrs: { 'aria-labelledby': 'ui-help-codex' } },
+      h('h3', { text: 'Codex', tabIndex: -1, attrs: { id: 'ui-help-codex' } }),
+      h('ul', { class: 'ui-help__list' }, ...CODEX_HELP.map((text) => h('li', {}, ...richText(text)))),
+    );
+    this.sections.set('codex', el);
+    return el;
+  }
+
+  /** O OpenCode no escritório (mesmo formato da seção do Codex). */
+  private opencodeSection(): HTMLElement {
+    const el = h(
+      'section',
+      { class: 'ui-help__usage', attrs: { 'aria-labelledby': 'ui-help-opencode' } },
+      h('h3', { text: 'OpenCode', tabIndex: -1, attrs: { id: 'ui-help-opencode' } }),
+      h('ul', { class: 'ui-help__list' }, ...OPENCODE_HELP.map((text) => h('li', {}, ...richText(text)))),
+    );
+    this.sections.set('opencode', el);
+    return el;
+  }
+
   get isOpen(): boolean {
     return this.el.open;
   }
+}
+
+/** Um chip de conta de exemplo (legenda). */
+function accountSample(short: string, color: string, codex = false): HTMLElement {
+  const chip = createAccountChip('sm');
+  updateAccountChip(chip, { id: short, short, name: codex ? 'Codex' : `Conta ${short}`, color, configDir: '', sessions: 0, usageStatus: 'disabled', ...(codex ? { provider: 'codex' as const } : {}) });
+  chip.setAttribute('aria-hidden', 'true');
+  return chip;
 }

@@ -1,8 +1,9 @@
 // Testes das partes puras do módulo de arte (sem DOM): aparência, templates, personagens, móveis,
 // pisos, paredes, ícones, temas e os desenhos por quadro (com um contexto falso).
 import { describe, expect, it } from 'vitest';
-import { FURNITURE, TILE, type Appearance, type Dir, type FloorKind, type FurnitureKind, type HeldItem, type Pose, type ScreenMode, type WallPattern } from './api';
-import { appearanceFromSeed, appearanceKey } from './character/appearance';
+import { ACCESSORIES, BOTTOM_STYLES, FACIAL_HAIR, HAIR_STYLES, PART_KEYS, TOP_STYLES } from '../../../shared/appearance';
+import { FURNITURE, TILE, type Accessory, type Appearance, type Dir, type FloorKind, type FurnitureKind, type HairStyle, type HeldItem, type Pose, type ScreenMode, type TopStyle, type WallPattern } from './api';
+import { appearanceFromSeed, appearanceKey, editorConflict, editorOptions, fitToOptions } from './character/appearance';
 import { HAIR, HEAD_BASE } from './character/hair';
 import { CHAR_AX, CHAR_AY, CHAR_H, CHAR_W, POSE_DURATION, POSE_FRAMES, isSeated, renderCharacter } from './character/render';
 import { PixelBuf } from './core/pixbuf';
@@ -851,5 +852,68 @@ describe('desenhos por quadro', () => {
     const c = fakeCtx();
     for (let h = 0; h < 24; h++) drawClock(c.ctx, face, new Date(2026, 0, 1, h, h * 2, h));
     expect(inside(c.rects, face)).toBe(true);
+  });
+});
+
+// Deriva entre shared/appearance (o que o servidor aceita) e as uniões da arte: quebra no typecheck.
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const STYLE_LISTS_MATCH: [
+  Same<(typeof HAIR_STYLES)[number], HairStyle>,
+  Same<(typeof TOP_STYLES)[number], TopStyle>,
+  Same<(typeof ACCESSORIES)[number], Accessory>,
+  Same<(typeof FACIAL_HAIR)[number], NonNullable<Appearance['facialHair']>>,
+  Same<(typeof BOTTOM_STYLES)[number], NonNullable<Appearance['bottomStyle']>>,
+] = [true, true, true, true, true];
+
+describe('editor do personagem (arte)', () => {
+  it('listas de estilos de shared/appearance batem com a arte', () => {
+    expect(STYLE_LISTS_MATCH.every(Boolean)).toBe(true);
+  });
+
+  it('parts sobrepõe só as peças escolhidas, sem mudar o resto do sorteio', () => {
+    const base = appearanceFromSeed(5, { look: 'f' });
+    expect(appearanceFromSeed(5, { look: 'f', parts: { hairStyle: 'mohawk', skin: '#5a3623' } })).toEqual({ ...base, hairStyle: 'mohawk', skin: '#5a3623' });
+    expect(appearanceFromSeed(5, { look: 'f', parts: {} })).toEqual(base);
+    // Um undefined explícito não apaga a peça sorteada.
+    expect(appearanceFromSeed(5, { look: 'f', parts: { hairStyle: undefined, skin: undefined } })).toEqual(base);
+  });
+
+  it('toda aparência sorteada usa valores que o editor oferece (paletas e estilos)', () => {
+    for (let i = 0; i < 300; i++) {
+      for (const look of ['f', 'm'] as const) {
+        const a = appearanceFromSeed(i, { look });
+        const o = editorOptions(a);
+        for (const k of PART_KEYS) expect(o[k], `${k} da seed ${i} (${look})`).toContain(a[k]);
+      }
+    }
+  });
+
+  it('as cores da parte de cima e do acessório dependem do estilo', () => {
+    const a = appearanceFromSeed(1);
+    const shirt = editorOptions({ ...a, topStyle: 'shirt_tie' });
+    expect(shirt.top).toContain('#f4f4f0');
+    expect(shirt.top).not.toContain('#e2604f');
+    expect(shirt.topAccent).toContain('#c0392b');
+    expect(editorOptions({ ...a, topStyle: 'jacket' }).top).toContain('#2f3b55');
+    expect(editorOptions({ ...a, accessory: 'sunglasses' }).accessoryColor).toEqual(['#22232b']);
+    expect(editorOptions(a).eyes.length).toBe(new Set(editorOptions(a).eyes).size);
+  });
+
+  it('combinações que o sorteio evita ficam desabilitadas, nos dois sentidos', () => {
+    const a = appearanceFromSeed(1);
+    expect(editorConflict({ ...a, hairStyle: 'afro' }, 'accessory', 'cap')).toMatch(/cabelo/);
+    expect(editorConflict({ ...a, hairStyle: 'afro' }, 'accessory', 'glasses')).toBeUndefined();
+    expect(editorConflict({ ...a, hairStyle: 'buzz' }, 'accessory', 'bow')).toMatch(/cabelo/);
+    expect(editorConflict({ ...a, accessory: 'beanie' }, 'hairStyle', 'mohawk')).toMatch(/gorro/);
+    expect(editorConflict({ ...a, accessory: 'bow' }, 'hairStyle', 'bald')).toMatch(/laço/);
+    expect(editorConflict({ ...a, accessory: 'none' }, 'hairStyle', 'bald')).toBeUndefined();
+  });
+
+  it('fitToOptions: depois de trocar o estilo, a cor fora da paleta nova cai na primeira dela', () => {
+    const a = { ...appearanceFromSeed(1), topStyle: 'shirt_tie' as const, top: '#e2604f', topAccent: '#e2604f' };
+    expect(fitToOptions(a)).toMatchObject({ top: '#f4f4f0', topAccent: '#c0392b' });
+    const ok = { ...appearanceFromSeed(1), topStyle: 'tshirt' as const, top: '#e2604f' };
+    expect(fitToOptions(ok).top).toBe('#e2604f');
+    expect(fitToOptions({ ...ok, accessory: 'sunglasses', accessoryColor: '#e2604f' }).accessoryColor).toBe('#22232b');
   });
 });

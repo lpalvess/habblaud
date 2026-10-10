@@ -192,3 +192,45 @@ describe('demoTerminalEntries', () => {
     expect(all.some((x) => x.kind === 'tool' && x.inputKind === 'diff')).toBe(true);
   });
 });
+
+describe('demoTerminalEntries: agente do Codex', () => {
+  it('comandos no shell (inclusive ler e buscar), apply_patch com o patch, update_plan, web_search e spawn_agent', () => {
+    const h = history();
+    const e = demoTerminalEntries(agent({ provider: 'codex', account: 'demo:.codex' }), h);
+    expect(new Set(e.map((x) => x.id)).size).toBe(e.length);
+    const groups = byActivity(e, h);
+    groups.forEach((g) => expect(g.length).toBeGreaterThan(0));
+    const tool = (i: number) => groups[i].find((x) => x.kind === 'tool') as Extract<TerminalEntry, { kind: 'tool' }>;
+    const result = (i: number) => groups[i].find((x) => x.kind === 'result') as Extract<TerminalEntry, { kind: 'result' }>;
+    expect(tool(2)).toMatchObject({ tool: 'Shell', inputKind: 'command' });
+    expect(tool(2).title).toMatch(/^Shell\(sed -n '1,\d+p' src\/pages\/Checkout\.tsx\)$/);
+    expect(result(2).text).toMatch(/^import /);
+    expect(tool(3)).toMatchObject({ tool: 'Shell', title: 'Shell(rg -n "useCart")' });
+    expect(tool(4)).toMatchObject({ tool: 'Shell', title: "Shell(rg --files -g '**/*.ts')" });
+    // Edição: o patch inteiro (Update File) e a resposta do apply_patch; arquivo novo: Add File.
+    expect(tool(5)).toMatchObject({ tool: 'apply_patch', title: 'apply_patch(src/components/Cart.tsx)', inputKind: 'diff' });
+    expect(tool(5).input).toMatch(/^\*\*\* Begin Patch\n\*\*\* Update File: src\/components\/Cart\.tsx\n@@\n-.+\n\+.+\n\*\*\* End Patch$/);
+    expect(result(5).text).toBe('Success. Updated the following files:\nM src/components/Cart.tsx');
+    expect(tool(6).input).toMatch(/^\*\*\* Begin Patch\n\*\*\* Add File: src\/api\/orders\.ts\n\+/);
+    expect(result(6).text).toBe('Success. Updated the following files:\nA src/api/orders.ts');
+    expect(tool(7)).toMatchObject({ tool: 'Shell', title: 'Shell(npm test)', input: 'npm test' });
+    expect(result(7).text).toMatch(/✓ \d+ testes passaram/);
+    expect(tool(10)).toMatchObject({ tool: 'web_search', title: 'web_search(react checkout form validation)' });
+    expect(tool(11).title).toMatch(/^Shell\(curl -sL https:\/\/developer\.mozilla\.org/);
+    expect(tool(12)).toMatchObject({ tool: 'update_plan', title: 'update_plan(1/3 concluídas)' });
+    expect(tool(13)).toMatchObject({ tool: 'spawn_agent', title: 'spawn_agent(worker: 3 frentes em paralelo)' });
+    expect(result(16).text).toMatch(/segundo plano/);
+    // Nada do jeito do Claude Code.
+    expect(e.some((x) => x.kind === 'tool' && ['Read', 'Edit', 'Write', 'Grep', 'Glob', 'Bash', 'TodoWrite', 'Agent', 'WebSearch', 'WebFetch'].includes(x.tool))).toBe(false);
+  });
+
+  it('com o simulador: os agentes do Codex ganham a conversa do Codex', () => {
+    const sim = new DemoSimulator({ seed: 2, speed: 8, sessions: 5 }, 0);
+    for (let t = 0; t < 120_000; t += 250) sim.tick(t);
+    const codex = sim.snapshot(120_000).agents.filter((a) => a.provider === 'codex' && a.recent.length);
+    expect(codex.length).toBeGreaterThan(0);
+    const entries = codex.flatMap((a) => demoTerminalEntries(a, a.recent));
+    expect(entries.some((x) => x.kind === 'tool' && (x.tool === 'Shell' || x.tool === 'apply_patch'))).toBe(true);
+    expect(entries.some((x) => x.kind === 'tool' && x.tool === 'Bash')).toBe(false);
+  });
+});

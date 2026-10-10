@@ -1,7 +1,7 @@
 // Registro dos pedidos de permissão (responder pelo escritório): desvio só com páginas abertas e sessão
 // conhecida, snapshot (status 'waiting', sem os argumentos), decisões, esperas do hook, órfãos, expiração,
-// agente que saiu, resposta no terminal (tool_result no transcript) e sugestões "sempre permitir".
-// Tudo com dados sintéticos.
+// agente que saiu, resposta no terminal (tool_result no transcript), sugestões "sempre permitir" e as
+// perguntas do AskUserQuestion (respostas por posição). Tudo com dados sintéticos.
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { setQuiet } from '../log';
@@ -59,13 +59,31 @@ function registered(r: ReturnType<PermissionRegistry['register']>): string {
   return r.id;
 }
 
+/**
+ * tool_input de um AskUserQuestion: a entrada 1 é inválida (pulada; as posições contam no original), um segredo
+ * na primeira pergunta e uma opção sem rótulo na segunda.
+ */
+const ASK_INPUT = {
+  questions: [
+    { question: 'Qual banco usar? (Authorization: Bearer abcdef123456)', header: 'Banco', multiSelect: false, options: [{ label: 'Postgres', description: 'Já usado no projeto' }, { label: 'SQLite' }] },
+    'lixo',
+    { question: 'Quais testes rodar?', header: 'Testes', multiSelect: true, options: [{ label: 'Unidade' }, { label: '' }, { label: 'E2E' }] },
+  ],
+};
+
+const askInput = (over: Record<string, unknown> = {}) => hookInput({ tool_name: 'AskUserQuestion', tool_input: ASK_INPUT, permission_suggestions: [], ...over });
+
 describe('PermissionRegistry: registro', () => {
-  it('sem página local aberta, com sessão desconhecida ou AskUserQuestion: não desvia (skip)', () => {
+  it('sem página local aberta, com sessão desconhecida ou AskUserQuestion sem perguntas para mostrar: não desvia (skip)', () => {
     const { registry, setViewers } = setup({ viewers: 0 });
     expect(registry.register(hookInput())).toEqual({ skip: 'no-viewers' });
     setViewers(2);
     expect(registry.register(hookInput({ session_id: 'outra' }))).toEqual({ skip: 'unknown-session' });
     expect(registry.register(hookInput({ tool_name: 'AskUserQuestion' }))).toEqual({ skip: 'unsupported-tool' });
+    expect(registry.register(askInput({ tool_input: { questions: [] } }))).toEqual({ skip: 'unsupported-tool' });
+    // Mais perguntas do que o escritório mostra: o hook não conseguiria responder todas.
+    const five = Array.from({ length: 5 }, (_, i) => ({ question: `Pergunta ${i}?`, options: [{ label: 'Sim' }, { label: 'Não' }] }));
+    expect(registry.register(askInput({ tool_input: { questions: five } }))).toEqual({ skip: 'unsupported-tool' });
     expect(registry.size).toBe(0);
   });
 
@@ -185,6 +203,84 @@ describe('PermissionRegistry: decisões e esperas do hook', () => {
     const t0 = Date.now();
     await expect(registry.wait(id, 30)!.result).resolves.toEqual({ status: 'pending' });
     expect(Date.now() - t0).toBeLessThan(2_000);
+  });
+});
+
+describe('PermissionRegistry: perguntas (AskUserQuestion)', () => {
+  it('publica as perguntas com as posições do original (mascaradas): espera "responder uma pergunta"; feed e aviso de pergunta', () => {
+    const { office, registry } = setup();
+    office.commit();
+    const id = registered(registry.register(askInput()));
+    const commit = office.commit();
+    const a = commit.snapshot.agents.find((x) => x.id === MAIN)!;
+    expect(a).toMatchObject({ status: 'waiting', waitingFor: 'responder uma pergunta' });
+    expect(a.permission).toMatchObject({ id, tool: 'AskUserQuestion', icon: '❓' });
+    expect(a.permission!.suggestions).toBeUndefined();
+    const qs = a.permission!.questions!;
+    expect(qs.map((q) => q.index)).toEqual([0, 2]);
+    expect(qs[0]!.question).not.toContain('abcdef123456');
+    expect(qs[0]!.multiSelect).toBeUndefined();
+    expect(qs[1]).toMatchObject({ header: 'Testes', multiSelect: true, options: [{ index: 0, label: 'Unidade' }, { index: 2, label: 'E2E' }] });
+    expect(commit.feed.map((f) => f.activity)).toEqual([expect.objectContaining({ icon: '❓', text: expect.stringMatching(/^Pergunta: Qual banco usar\?/) })]);
+    expect(commit.notices.map((n) => n.text)).toEqual([expect.stringMatching(/^❓ .+ tem uma pergunta em loja: Qual banco usar\?/)]);
+    expect(commit.notices[0]!.text).not.toContain('abcdef123456');
+  });
+
+  it('responder: a espera recebe as respostas por posição (normalizadas) e a linha do tempo ganha o resumo', async () => {
+    const { office, registry } = setup();
+    const id = registered(registry.register(askInput()));
+    const w = registry.wait(id, 25_000)!;
+    const d = parseDecision({ behavior: 'answer', answers: [{ question: 2, options: [2, 0], other: '  lint  ' }, { question: 0, options: [1] }] })!;
+    expect(registry.decide(id, d)).toBe('ok');
+    await expect(w.result).resolves.toEqual({
+      status: 'decided',
+      behavior: 'answer',
+      answers: [
+        { question: 0, options: [1] },
+        { question: 2, options: [0, 2], other: 'lint' },
+      ],
+    });
+    const a = snapAgent(office, MAIN)!;
+    expect(a.permission).toBeUndefined();
+    expect(a.status).toBe('working');
+    const act = office.detail(MAIN)!.history.find((h) => h.text === 'Respondido no Habblaud')!;
+    expect(act).toMatchObject({ icon: '💬', kind: 'other' });
+    expect(act.detail).toBe('Banco: SQLite · Testes: Unidade, E2E, “lint”');
+    expect(registry.decide(id, d)).toBe('not-found');
+  });
+
+  it('respostas que não batem com as perguntas, aprovar uma pergunta ou responder uma permissão: inválidas (o pedido segue aberto)', () => {
+    const { registry } = setup();
+    const id = registered(registry.register(askInput()));
+    const answer = (answers: unknown) => registry.decide(id, parseDecision({ behavior: 'answer', answers })!);
+    const multi = { question: 2, options: [0] };
+    expect(registry.decide(id, { behavior: 'allow' })).toBe('invalid-answer');
+    expect(answer([{ question: 0, options: [0] }])).toBe('invalid-answer'); // falta uma pergunta
+    expect(answer([{ question: 0, options: [0, 1] }, multi])).toBe('invalid-answer'); // escolha única com duas
+    expect(answer([{ question: 0, options: [0], other: 'e mais' }, multi])).toBe('invalid-answer');
+    expect(answer([{ question: 0, options: [0] }, { question: 2, options: [1] }])).toBe('invalid-answer'); // opção sem rótulo
+    expect(answer([{ question: 0, options: [0] }, { question: 2, options: [7] }])).toBe('invalid-answer');
+    expect(answer([{ question: 0, options: [0] }, { question: 1, options: [0] }])).toBe('invalid-answer'); // entrada inválida
+    expect(answer([{ question: 0, options: [0] }, { question: 2 }])).toBe('invalid-answer'); // várias, mas nenhuma
+    expect(registry.size).toBe(1);
+    const bash = registered(registry.register(hookInput()));
+    expect(registry.decide(bash, { behavior: 'answer', answers: [{ question: 0, options: [0] }] })).toBe('invalid-answer');
+    // Recusar (não responder) e devolver ao terminal valem para a pergunta.
+    expect(registry.decide(id, { behavior: 'deny', message: 'decida você' })).toBe('ok');
+  });
+
+  it('respondida no terminal: o principal deixa de esperar (plano B; a chamada só vai ao transcript com a resposta)', async () => {
+    const { office, registry, clock } = setup();
+    const id = registered(registry.register(askInput()));
+    const w = registry.wait(id, 25_000)!;
+    office.setStatus(MAIN, 'waiting', 'responder uma pergunta');
+    registry.tick();
+    office.setStatus(MAIN, 'working');
+    registry.tick();
+    expect(registry.size).toBe(1);
+    clock.advance(3_100);
+    registry.tick();
+    await expect(w.result).resolves.toEqual({ status: 'released', reason: 'answered' });
   });
 });
 
@@ -331,6 +427,29 @@ describe('peças puras', () => {
     expect(parseDecision({ behavior: 'allow', suggestion: '1' })).toBeUndefined();
     expect(parseDecision({ behavior: 'yes' })).toBeUndefined();
     expect(parseDecision(null)).toBeUndefined();
+  });
+
+  it('parseDecision: answer (posições inteiras, opções distintas em ordem, texto livre aparado até 2.000)', () => {
+    expect(parseDecision({ behavior: 'answer', answers: [{ question: 1, options: [3, 0], other: '  x  ', extra: 1 }, { question: 0, options: [], other: ' ' }], message: 'ignorado' })).toEqual({
+      behavior: 'answer',
+      answers: [{ question: 1, options: [0, 3], other: 'x' }, { question: 0 }],
+    });
+    const bad: unknown[] = [
+      { behavior: 'answer' },
+      { behavior: 'answer', answers: [] },
+      { behavior: 'answer', answers: Array.from({ length: 5 }, (_, i) => ({ question: i, options: [0] })) },
+      { behavior: 'answer', answers: [{ options: [0] }] },
+      { behavior: 'answer', answers: [{ question: -1, options: [0] }] },
+      { behavior: 'answer', answers: [{ question: 0.5, options: [0] }] },
+      { behavior: 'answer', answers: [{ question: 0, options: [1, 1] }] },
+      { behavior: 'answer', answers: [{ question: 0, options: ['1'] }] },
+      { behavior: 'answer', answers: [{ question: 0, options: 1 }] },
+      { behavior: 'answer', answers: [{ question: 0, other: 3 }] },
+      { behavior: 'answer', answers: [{ question: 0, other: 'x'.repeat(2_001) }] },
+      { behavior: 'answer', answers: ['x'] },
+    ];
+    for (const b of bad) expect(parseDecision(b), JSON.stringify(b).slice(0, 80)).toBeUndefined();
+    expect(parseDecision({ behavior: 'answer', answers: [{ question: 0, other: ` ${'x'.repeat(2_000)} ` }] })).toBeDefined();
   });
 
   it('callSignature: o argumento principal das ferramentas conhecidas, o resto inteiro', () => {

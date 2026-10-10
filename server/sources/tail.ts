@@ -13,6 +13,14 @@ export interface TailRead {
 }
 
 const NL = 0x0a;
+/** Quanto do começo do arquivo guardar para confirmar uma troca que só o birthtime aponta (ver `replaced`). */
+const HEAD_BYTES = 256;
+
+/** Os primeiros `max` bytes do arquivo, numa leitura posicional (não mexe no offset da leitura incremental). */
+function readHead(fd: number, max: number): Buffer {
+  const buf = Buffer.alloc(max);
+  return max > 0 ? buf.subarray(0, readSync(fd, buf, 0, max, 0)) : buf;
+}
 
 export class FileTail {
   /** Próximo byte a ler. */
@@ -23,6 +31,8 @@ export class FileTail {
   private ino: number | undefined;
   /** Momento de criação do arquivo (0 quando o sistema de arquivos não informa). */
   private birthtimeMs = 0;
+  /** Começo do arquivo (até HEAD_BYTES); null = ainda não lido. */
+  private head: Buffer | null = null;
   private readonly maxChunk: number;
 
   constructor(
@@ -51,6 +61,7 @@ export class FileTail {
       this.birthtimeMs = st.birthtimeMs;
       this.size = st.size;
       this.mtimeMs = st.mtimeMs;
+      this.head = readHead(fd, Math.min(st.size, HEAD_BYTES));
       if (st.size <= maxBytes) {
         this.offset = 0;
         return 0;
@@ -78,6 +89,7 @@ export class FileTail {
   /** Posiciona no fim do arquivo (só o que for escrito daqui em diante será lido). */
   seekEnd(): void {
     this.partial = null;
+    this.head = null;
     try {
       const st = statSync(this.path);
       this.ino = st.ino;
@@ -92,12 +104,16 @@ export class FileTail {
 
   /**
    * O arquivo foi trocado por outro? O inode diferente basta, mas o sistema de arquivos pode reaproveitar o
-   * número de um arquivo apagado: por isso, quando os dois lados informam o momento de criação, ele também conta.
+   * número de um arquivo apagado (ext4): por isso, quando os dois lados informam o momento de criação, ele também
+   * conta. Só que no Linux sem statx (WSL1, seccomp antigo) o Node devolve o ctime no lugar dele, e o ctime muda a
+   * cada escrita: a mudança do birthtime só vale se o começo do arquivo também mudou. Um arquivo novo que comece com
+   * os mesmos bytes passa como o mesmo, como antes de o birthtime contar.
    */
-  private replaced(st: { ino: number; birthtimeMs: number }): boolean {
+  private replaced(fd: number, st: { ino: number; birthtimeMs: number }): boolean {
     if (this.ino === undefined) return false;
     if (st.ino !== this.ino) return true;
-    return this.birthtimeMs > 0 && st.birthtimeMs > 0 && st.birthtimeMs !== this.birthtimeMs;
+    if (!(this.birthtimeMs > 0 && st.birthtimeMs > 0 && st.birthtimeMs !== this.birthtimeMs)) return false;
+    return !!this.head && !readHead(fd, this.head.length).equals(this.head);
   }
 
   read(): TailRead {
@@ -111,15 +127,19 @@ export class FileTail {
     try {
       const st = fstatSync(fd);
       let reset = false;
-      if (this.replaced(st) || st.size < this.offset) {
+      if (this.replaced(fd, st) || st.size < this.offset) {
         this.offset = 0;
         this.partial = null;
+        this.head = null;
         reset = true;
       }
       this.ino = st.ino;
       this.birthtimeMs = st.birthtimeMs;
       this.size = st.size;
       this.mtimeMs = st.mtimeMs;
+      // O começo só é relido enquanto o arquivo ainda não chegou a HEAD_BYTES.
+      const headLen = Math.min(st.size, HEAD_BYTES);
+      if (!this.head || this.head.length < headLen) this.head = readHead(fd, headLen);
       const avail = st.size - this.offset;
       if (avail <= 0) return { lines: [], reset, missing: false, more: false };
       const len = Math.min(avail, this.maxChunk);

@@ -1,3 +1,4 @@
+// Fonte de agentes do Claude Code (AgentSource 'claude', ver sources/source.ts).
 // Observa as sessões ABERTAS do Claude Code em todas as contas e alimenta o Office:
 // registro de sessões (status), transcript da sessão (atividades, tarefas, números) e
 // subagentes (arquivos em <sessão>/subagents/, inclusive os de workflows).
@@ -14,6 +15,7 @@ import { errMsg, log } from '../log';
 import type { Office, TranscriptSummary } from '../model/office';
 import { compareVersions, registryStatus, RegistryReader, SHELL_STATUS_VERSION, type RegistryEntry } from './registry';
 import { SHELL_FALLBACK_MAX_AGE_MS, ShellTracker, toShellJob, type ShellFinish } from './shells';
+import type { AgentSource } from './source';
 import {
   BOOT_RECENT_MS,
   concludedByIdle,
@@ -150,7 +152,8 @@ function addBounded(set: Set<string>, v: string): void {
   if (set.size > MAX_SET) set.delete(set.values().next().value as string);
 }
 
-export class ClaudeWatcher {
+export class ClaudeWatcher implements AgentSource {
+  readonly provider = 'claude' as const;
   private readers = new Map<string, RegistryReader>();
   private sessions = new Map<string, SessionTracker>();
   private sourceInfo = new Map<string, SourceInfo>();
@@ -179,7 +182,7 @@ export class ClaudeWatcher {
     this.timer.unref?.();
   }
 
-  /** Reconstrói as sessões abertas sem gerar avisos (o feed sai em ordem cronológica). */
+  /** Reconstrói as sessões abertas sem gerar avisos (o feed sai em ordem cronológica). Síncrono. */
   boot(): void {
     this.opts.office.beginBoot();
     try {
@@ -207,7 +210,7 @@ export class ClaudeWatcher {
   }
 
   /**
-   * Caminho do transcript de um agente presente (terminal somente leitura): principal = "<conta>:<pid>"
+   * Caminho do transcript de um agente presente (terminal): principal = "<conta>:<pid>"
    * (depois de /clear ou /resume, o transcript novo); subagente = "<sessionId>:<agentId>". Undefined se o
    * agente não é acompanhado (ou o transcript do principal ainda não foi achado).
    */

@@ -155,3 +155,50 @@ describe('shells', () => {
     expect(SPECIAL.shellDone('Migração', 'killed')).toMatchObject({ icon: '🛑', text: 'Shell interrompido: Migração', error: true });
   });
 });
+
+describe('AskUserQuestion no escritório', () => {
+  it('leva as perguntas completas, com opções, para o cartão "Precisa de você"', () => {
+    const d = describeTool('AskUserQuestion', {
+      questions: [
+        {
+          question: 'Qual banco usar?',
+          header: 'Banco',
+          multiSelect: false,
+          options: [
+            { label: 'Postgres', description: 'Relacional, já usado no projeto' },
+            { label: 'SQLite' },
+          ],
+        },
+        { question: 'Quais testes rodar?', multiSelect: true, options: [{ label: 'Unidade' }, { label: 'E2E' }] },
+      ],
+    });
+    expect(d).toMatchObject({ kind: 'ask', text: 'Fazendo uma pergunta a você', detail: 'Qual banco usar?' });
+    expect(d.questions).toEqual([
+      {
+        index: 0,
+        question: 'Qual banco usar?',
+        header: 'Banco',
+        options: [
+          { index: 0, label: 'Postgres', description: 'Relacional, já usado no projeto' },
+          { index: 1, label: 'SQLite' },
+        ],
+      },
+      { index: 1, question: 'Quais testes rodar?', multiSelect: true, options: [{ index: 0, label: 'Unidade' }, { index: 1, label: 'E2E' }] },
+    ]);
+  });
+
+  it('mascara segredos e ignora entradas inválidas', () => {
+    const d = describeTool('AskUserQuestion', {
+      questions: [null, { question: '' }, { question: 'Usar a chave sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789?', options: [{ label: '' }, { label: 'Sim' }] }],
+    });
+    expect(d.questions).toHaveLength(1);
+    expect(d.questions![0]!.question).not.toContain('abcdefghijklmnop');
+    // As posições são as do original (a resposta pelo escritório volta por elas), com as inválidas contadas.
+    expect(d.questions![0]!.index).toBe(2);
+    expect(d.questions![0]!.options).toEqual([{ index: 1, label: 'Sim' }]);
+  });
+
+  it('sem perguntas válidas, não cria o campo', () => {
+    expect(describeTool('AskUserQuestion', {}).questions).toBeUndefined();
+  });
+});

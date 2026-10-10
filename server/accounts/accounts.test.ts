@@ -1,15 +1,16 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setQuiet } from '../log';
 import { tempDir } from '../test/fixtures';
-import { accountIds, discoverClaudeDirs, detectAccounts, parseClaudeAliases, shortcutsByDir } from './detect';
+import { accountIds, codexDirsRefused, discoverClaudeDirs, detectAccounts, isClaudeDir, isCodexHome, parseClaudeAliases, shortcutsByDir } from './detect';
 import { AccountsService } from './service';
 import { rollover, STALE_AFTER_MS, usageFromCache, usageFromWindows, UsageStore } from './usage';
 
 setQuiet(true);
 
-const H = '/Users/fulano';
+// Raiz absoluta também no Windows (lá o resolve põe a letra do drive).
+const H = resolve('/Users/fulano');
 
 describe('aliases de shell', () => {
   it('só linhas alias que invocam o claude; CLAUDE_CONFIG_DIR expandido', () => {
@@ -26,21 +27,21 @@ describe('aliases de shell', () => {
       "alias w='cd ~/.claude && ls'",
     ].join('\n');
     expect(parseClaudeAliases(rc, H)).toEqual([
-      { name: 'claude2', configDir: `${H}/.claude-conta2` },
+      { name: 'claude2', configDir: join(H, '.claude-conta2') },
       { name: 'c' },
       { name: 'f' },
-      { name: 'd', configDir: `${H}/.claude-conta2` },
-      { name: 'e', configDir: `${H}/.claude-trabalho` },
+      { name: 'd', configDir: join(H, '.claude-conta2') },
+      { name: 'e', configDir: join(H, '.claude-trabalho') },
     ]);
   });
 
   it('prefere o alias mais curto (empate: o primeiro) e usa maiúscula', () => {
     const m = shortcutsByDir(
-      [{ name: 'claude2', configDir: `${H}/.claude-conta2` }, { name: 'c' }, { name: 'f' }, { name: 'd', configDir: `${H}/.claude-conta2` }],
+      [{ name: 'claude2', configDir: join(H, '.claude-conta2') }, { name: 'c' }, { name: 'f' }, { name: 'd', configDir: join(H, '.claude-conta2') }],
       H,
     );
-    expect(m.get(`${H}/.claude`)).toBe('C');
-    expect(m.get(`${H}/.claude-conta2`)).toBe('D');
+    expect(m.get(join(H, '.claude'))).toBe('C');
+    expect(m.get(join(H, '.claude-conta2'))).toBe('D');
   });
 
   it('ids desambiguados quando dois dirs têm o mesmo basename', () => {
@@ -70,7 +71,47 @@ describe('detecção de contas', () => {
     const extra = join(home, 'outra');
     mkdirSync(extra);
     expect(discoverClaudeDirs({ CLAUDE_CONFIG_DIR: extra }, home)).toContain(extra);
-    expect(discoverClaudeDirs({ HABBLAUD_CLAUDE_DIRS: ' /x/a , ~/b ' }, home)).toEqual(['/x/a', join(home, 'b')]);
+    expect(discoverClaudeDirs({ HABBLAUD_CLAUDE_DIRS: ' /x/a , ~/b ' }, home)).toEqual([resolve('/x/a'), join(home, 'b')]);
+  });
+
+  it('pasta do Codex (CODEX_HOME) não vira conta do Claude Code, por nenhum caminho', () => {
+    // Um CODEX_HOME sintético: sessions/AAAA/MM/DD (rollouts), locks, config.toml e auth.json (nunca abertos).
+    const codex = join(home, '.codex');
+    mkdirSync(join(codex, 'sessions', '2026', '10', '09'), { recursive: true });
+    mkdirSync(join(codex, 'thread-writer-locks'), { recursive: true });
+    writeFileSync(join(codex, 'config.toml'), 'model = "x"\n');
+    writeFileSync(join(codex, 'auth.json'), '{}');
+    // CODEX_HOME com nome que a busca em $HOME pega (.claude*): só com sessions/AAAA/.
+    const disfarcado = join(home, '.claude-codex');
+    mkdirSync(join(disfarcado, 'sessions', '2026'), { recursive: true });
+    for (const marca of ['thread-writer-locks', 'archived_sessions', 'config.toml', 'auth.json', 'sessions/2026']) {
+      const p = join(home, `codex-${marca.replace('/', '-')}`);
+      if (marca.includes('.')) {
+        mkdirSync(join(p, 'sessions'), { recursive: true });
+        writeFileSync(join(p, marca), '');
+      } else mkdirSync(join(p, marca), { recursive: true });
+      expect(isCodexHome(p), marca).toBe(true);
+      expect(isClaudeDir(p), marca).toBe(false);
+    }
+    // Contas do Claude Code continuam valendo: sessions/ vazio ou com <pid>.json, e projects/ sempre vence.
+    writeFileSync(join(home, '.claude-conta2', 'sessions', '123.json'), '{}');
+    for (const p of [join(home, '.claude'), join(home, '.claude-conta2')]) expect(isClaudeDir(p)).toBe(true);
+    const misto = join(home, '.claude-misto');
+    mkdirSync(join(misto, 'projects'), { recursive: true });
+    writeFileSync(join(misto, 'config.toml'), '');
+    expect(isCodexHome(misto)).toBe(false);
+    expect(isCodexHome(join(home, 'nao-existe'))).toBe(false);
+    expect(isCodexHome(join(home, '.claude-vazio'))).toBe(false);
+
+    expect(discoverClaudeDirs({}, home)).toEqual([join(home, '.claude'), join(home, '.claude-conta2'), misto]);
+    expect(codexDirsRefused({}, home)).toEqual([disfarcado]);
+    // CLAUDE_CONFIG_DIR e HABBLAUD_CLAUDE_DIRS apontando para o Codex: fora (o resto da lista segue igual).
+    expect(discoverClaudeDirs({ CLAUDE_CONFIG_DIR: codex }, home)).not.toContain(codex);
+    expect(codexDirsRefused({ CLAUDE_CONFIG_DIR: codex }, home)).toEqual([disfarcado, codex]);
+    expect(discoverClaudeDirs({ HABBLAUD_CLAUDE_DIRS: `~/.claude,~/.codex,/x/a` }, home)).toEqual([join(home, '.claude'), resolve('/x/a')]);
+    expect(codexDirsRefused({ HABBLAUD_CLAUDE_DIRS: `~/.claude,~/.codex,/x/a` }, home)).toEqual([codex]);
+    const env = { HABBLAUD_ACCOUNTS: JSON.stringify([{ id: '.codex', mountDir: codex }]) };
+    expect(discoverClaudeDirs(env, home)).not.toContain(codex);
   });
 
   it('lê só os campos permitidos do .claude.json, atalhos e cores', () => {
@@ -170,6 +211,74 @@ describe('uso (5h e semanal)', () => {
     expect(store.view('x', NOW)).toMatchObject({ status: 'ok', usage: { source: 'statusline', fiveHour: { utilization: 77 } } });
     expect(store.clear('x', 'statusline')).toBe(true);
     expect(store.view('x', NOW)).toMatchObject({ status: 'stale', usage: { source: 'cache' } });
+  });
+
+  it('AccountsService: contas de outra ferramenta (lista vinda de fora), ids únicos e uso empurrado', () => {
+    const tmp = tempDir();
+    try {
+      const dir = join(tmp.dir, '.claude');
+      mkdirSync(join(dir, 'sessions'), { recursive: true });
+      let changes = 0;
+      let now = NOW;
+      const svc = new AccountsService({ dirs: [dir], home: tmp.dir, env: {}, onChange: () => changes++, now: () => now });
+      const det = (id: string) => ({ id, configDir: `/Users/x/${id}`, short: 'X', name: 'Codex', color: '#10a37f' });
+      changes = 0;
+      const set = svc.setProviderAccounts('codex', [
+        { dir: join(tmp.dir, '.codex'), detected: det('.codex') },
+        { dir: join(tmp.dir, 'b', '.codex'), detected: det('.codex') },
+        // Mesmo id de uma conta do Claude Code: desambiguado.
+        { dir: join(tmp.dir, 'c', '.claude'), detected: det('.claude') },
+      ]);
+      expect(set.map((e) => [e.id, e.provider, e.detected.id, e.detected.provider])).toEqual([
+        ['.codex', 'codex', '.codex', 'codex'],
+        ['.codex~2', 'codex', '.codex~2', 'codex'],
+        ['.claude~2', 'codex', '.claude~2', 'codex'],
+      ]);
+      expect(changes).toBe(1);
+      // Mesma lista de novo: mesmos ids, sem aviso de mudança.
+      expect(svc.setProviderAccounts('codex', set.map((e) => ({ dir: e.dir, detected: det(basename(e.dir)) }))).map((e) => e.id)).toEqual([
+        '.codex',
+        '.codex~2',
+        '.claude~2',
+      ]);
+      expect(changes).toBe(1);
+      // entries() = só o Claude Code (watcher, histórico e statusline); o resto vê todas.
+      expect(svc.entries().map((e) => [e.id, e.provider])).toEqual([['.claude', 'claude']]);
+      expect(svc.entriesOf('codex').map((e) => e.id)).toEqual(['.codex', '.codex~2', '.claude~2']);
+      expect(svc.allEntries().map((e) => e.id)).toEqual(['.claude', '.codex', '.codex~2', '.claude~2']);
+      expect(svc.find('.codex~2')?.dir).toBe(join(tmp.dir, 'b', '.codex'));
+      expect(svc.idForDir(join(tmp.dir, '.codex'))).toBe('.codex');
+      const infos = svc.list(new Map([['.codex', 2]]));
+      expect(infos[0]).not.toHaveProperty('provider');
+      expect(infos[1]).toMatchObject({ id: '.codex', provider: 'codex', sessions: 2, usageStatus: 'disabled', configDir: '/Users/x/.codex' });
+
+      // Uso empurrado pela fonte (origem 'codex'), com a conta sem cota.
+      changes = 0;
+      expect(svc.setUsage('.codex', { source: 'codex', fetchedAt: NOW - 60_000, fiveHour: { utilization: 12.5, resetsAt: NOW + 3_600_000 } })).toBe(true);
+      expect(changes).toBe(1);
+      expect(svc.setUsage('.codex', { source: 'codex', fetchedAt: NOW - 60_000, fiveHour: { utilization: 12.5, resetsAt: NOW + 3_600_000 } })).toBe(false);
+      expect(changes).toBe(1);
+      svc.setUsage('.codex~2', { source: 'codex', fetchedAt: NOW, noQuota: true });
+      expect(svc.list(new Map()).find((a) => a.id === '.codex')).toMatchObject({ usageStatus: 'ok', usage: { source: 'codex', fiveHour: { utilization: 12.5 } } });
+      expect(svc.list(new Map()).find((a) => a.id === '.codex~2')?.usage).toEqual({ source: 'codex', fetchedAt: NOW, noQuota: true });
+      // Envelhece como as outras origens (o refresh periódico percebe e avisa).
+      now = NOW + STALE_AFTER_MS;
+      changes = 0;
+      svc.refresh();
+      expect(changes).toBe(1);
+      expect(svc.usageView('.codex').status).toBe('stale');
+      expect(svc.clearUsage('.codex', 'codex')).toBe(true);
+      expect(svc.usageView('.codex').status).toBe('disabled');
+
+      // Conta que saiu perde o uso guardado; lista vazia tira a ferramenta.
+      svc.setProviderAccounts('codex', [{ dir: join(tmp.dir, '.codex'), detected: det('.codex') }]);
+      expect(svc.usageView('.codex~2').status).toBe('disabled');
+      svc.setProviderAccounts('codex', []);
+      expect(svc.allEntries().map((e) => e.id)).toEqual(['.claude']);
+      expect(svc.list(new Map()).map((a) => a.id)).toEqual(['.claude']);
+    } finally {
+      tmp.cleanup();
+    }
   });
 
   it('AccountsService lê o cache do /usage do .claude.json da conta', () => {

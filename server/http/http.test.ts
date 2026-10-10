@@ -2,7 +2,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ModSummary, OfficeSnapshot, PermissionRequestInfo, UpdateStatus } from '../../shared/types';
 import { AccountsService } from '../accounts/service';
 import { setQuiet } from '../log';
@@ -164,11 +164,24 @@ describe('API HTTP', () => {
     }
   });
 
-  it('terminal somente leitura desligado: 403 JSON e meta.terminal false', async () => {
+  it('terminal desligado: 403 JSON e meta.terminal false', async () => {
     const res = await fetch(`${env.base}/api/agents/${encodeURIComponent('.claude:1')}/terminal`);
     expect(res.status).toBe(403);
     expect(((await res.json()) as { error: string }).error).toMatch(/desligado/);
     expect((await snapshotOf(env.base)).meta.terminal).toBe(false);
+  });
+
+  it('personagem: PUT e DELETE desligados sem o terminal (403)', async () => {
+    const res = await fetch(`${env.base}/api/agents/${encodeURIComponent('.claude:1')}/character`, {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ name: 'Ana', seed: 1, parts: {} }),
+    });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: string }).error).toMatch(/desligado/);
+    const del = await fetch(`${env.base}/api/agents/${encodeURIComponent('.claude:1')}/character`, { method: 'DELETE', headers: JSON_HEADERS, body: '{}' });
+    expect(del.status).toBe(403);
+    expect(((await del.json()) as { error: string }).error).toMatch(/desligado/);
   });
 
   it('POST /api/demo liga e desliga', async () => {
@@ -255,6 +268,76 @@ describe('API HTTP', () => {
   });
 });
 
+describe('personagem do projeto (PUT/DELETE /api/agents/:id/character)', () => {
+  let env: Awaited<ReturnType<typeof start>>;
+  beforeEach(async () => {
+    env = await start({ terminal: true });
+  });
+  afterEach(async () => {
+    await env.close();
+    env.cleanup();
+  });
+
+  const url = (id = '.claude:1') => `${env.base}/api/agents/${encodeURIComponent(id)}/character`;
+  const put = (body: unknown, id?: string) => fetch(url(id), { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify(body) });
+  const agentOf = async (id = '.claude:1') => (await snapshotOf(env.base)).agents.find((a) => a.id === id)!;
+
+  it('PUT grava e o snapshot traz nome, seed, peças e custom; DELETE volta ao sorteio', async () => {
+    const before = await agentOf();
+    const res = await put({ name: '  Ana   Backend ', seed: 7, parts: { hairStyle: 'bob', skin: '#5A3623' } });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    await vi.waitFor(async () =>
+      expect(await agentOf()).toMatchObject({ name: 'Ana Backend', seed: 7, parts: { skin: '#5a3623', hairStyle: 'bob' }, custom: true }),
+    );
+    const del = await fetch(url(), { method: 'DELETE', headers: JSON_HEADERS, body: '{}' });
+    expect(del.status).toBe(200);
+    await vi.waitFor(async () => expect(await agentOf()).toMatchObject({ name: before.name, seed: before.seed }));
+    expect((await agentOf()).custom).toBeUndefined();
+  });
+
+  it('400 para nome, seed ou peças inválidos', async () => {
+    for (const body of [
+      { name: '', seed: 1, parts: {} },
+      { name: 'a'.repeat(25), seed: 1, parts: {} },
+      { name: 'Ana', seed: -1, parts: {} },
+      { name: 'Ana', seed: 1, parts: { skin: 'red' } },
+      { name: 'Ana', seed: 1, parts: { lanyard: '#ffffff' } },
+      { name: 'Ana', seed: 1 },
+      { name: 'Ana', seed: 1, parts: null },
+    ]) {
+      const res = await put(body);
+      expect(res.status, JSON.stringify(body)).toBe(400);
+    }
+  });
+
+  it('404 para subagente e agente desconhecido; 409 para nome de quem está no escritório', async () => {
+    env.office.addSub({ id: 's1:x', parentId: '.claude:1', sessionId: 's1', role: 'Explore', background: false, startedAt: Date.now() });
+    expect((await put({ name: 'Ana', seed: 1, parts: {} }, 's1:x')).status).toBe(404);
+    expect((await put({ name: 'Ana', seed: 1, parts: {} }, 'nao-existe')).status).toBe(404);
+    for (const id of ['s1:x', 'nao-existe']) expect((await fetch(url(id), { method: 'DELETE', headers: JSON_HEADERS, body: '{}' })).status).toBe(404);
+    env.office.addMain({ id: '.claude:2', account: '.claude', sessionId: 's2', cwd: '/p/web', role: 'Agente principal', startedAt: Date.now(), status: 'working' });
+    const other = env.office.get('.claude:2')!.name;
+    const res = await put({ name: other, seed: 1, parts: {} });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toBe(`${other} já está no escritório em web`);
+  });
+
+  it('403 com Host que não é local (mesmo liberado em HABBLAUD_ALLOWED_HOSTS); 405 para GET', async () => {
+    const port = new URL(env.base).port;
+    const r = await raw(env.base, `/api/agents/${encodeURIComponent('.claude:1')}/character`, {
+      method: 'PUT',
+      headers: { ...JSON_HEADERS, Host: `habblaud.lan:${port}` },
+      body: JSON.stringify({ name: 'Ana', seed: 1, parts: {} }),
+    });
+    expect(r.status).toBe(403);
+    expect(r.body).toMatch(/próprio computador/);
+    const get = await fetch(url());
+    expect(get.status).toBe(405);
+    expect(get.headers.get('allow')).toBe('PUT, DELETE');
+  });
+});
+
 describe('GET /api/mod/summary (mod do Claude Code)', () => {
   let env: Awaited<ReturnType<typeof start>>;
   const perms = new Map<string, PermissionRequestInfo>();
@@ -337,7 +420,7 @@ describe('guarda de Host/Origin', () => {
     for (const h of ['attacker.example:4747', 'localhost.attacker.example', '127.0.0.1.nip.io', '', 'x y']) expect(hostAllowed(h, allowed)).toBe(false);
   });
 
-  it('isLoopbackHost: só localhost, *.localhost, 127.x e ::1 (terminal somente leitura)', () => {
+  it('isLoopbackHost: só localhost, *.localhost, 127.x e ::1 (terminal)', () => {
     for (const h of ['localhost:4747', 'LOCALHOST', 'app.localhost:1', '127.0.0.1:4747', '127.8.9.10', '[::1]:4747']) expect(isLoopbackHost(h)).toBe(true);
     for (const h of [undefined, '', '10.0.0.5:4747', '192.168.0.10', '0.0.0.0:4747', 'habblaud.lan', 'meu-mac.local:4747', '[::]:4747', 'localhost.attacker.example', '127.0.0.1.nip.io', 'x y']) {
       expect(isLoopbackHost(h)).toBe(false);

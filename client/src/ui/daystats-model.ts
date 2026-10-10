@@ -87,7 +87,11 @@ export interface Highlights {
   activity: string;
 }
 
-export function highlights(stats: DayStats, clock: (t: number) => string): Highlights {
+/**
+ * `codex` = alguma conta do Codex trabalhou no dia: o custo é só o do Claude Code (o Codex não grava custo, só
+ * tokens), e a dica diz isso.
+ */
+export function highlights(stats: DayStats, clock: (t: number) => string, codex = false): Highlights {
   const t = stats.totals;
   const c = t.counts;
   const top = stats.waits[0];
@@ -106,9 +110,13 @@ export function highlights(stats: DayStats, clock: (t: number) => string): Highl
     cost: c.costUSD > 0 ? formatUSD(c.costUSD) : '—',
     costHint:
       c.costUSD > 0
-        ? 'Custo calculado pelo próprio Claude Code'
+        ? codex
+          ? 'Só do Claude Code: o Codex não grava custo, só tokens'
+          : 'Custo calculado pelo próprio Claude Code'
         : c.tokensIn + c.tokensOut > 0
-          ? 'Os transcripts não trouxeram o custo'
+          ? codex
+            ? 'O Codex não grava custo, só tokens'
+            : 'Os transcripts não trouxeram o custo'
           : 'Nenhum gasto registrado',
     prompts: formatInt(c.prompts),
     activity: `${plural(c.toolCalls, 'ferramenta', 'ferramentas')} · ${plural(c.tasksDone, 'tarefa concluída', 'tarefas concluídas')}`,
@@ -241,15 +249,20 @@ export interface AccountCard {
   waiting: string;
   sessions: string;
   tokens: string;
-  cost: string;
+  /** null = conta do Codex (ele não grava custo: o cartão mostra só os tokens). */
+  cost: string | null;
+  /** Conta do Codex (chip vazado). */
+  codex: boolean;
 }
 
-export function accountCards(accounts: readonly AccountDayStats[]): AccountCard[] {
+/** `isCodex` diz quais contas são do Codex (o protocolo do dia não traz a ferramenta: vem do snapshot ou do id). */
+export function accountCards(accounts: readonly AccountDayStats[], isCodex: (id: string) => boolean = () => false): AccountCard[] {
   const work = accounts.reduce((n, a) => n + a.ms.working, 0);
   return accounts
     .filter((a) => totalMs(a.ms) > 0 || a.counts.tokensIn > 0)
     .map((a) => {
       const share = work > 0 ? Math.round((a.ms.working / work) * 100) : 0;
+      const codex = isCodex(a.id);
       return {
         id: a.id,
         name: a.name,
@@ -261,7 +274,8 @@ export function accountCards(accounts: readonly AccountDayStats[]): AccountCard[
         waiting: formatAgentTime(a.ms.waiting),
         sessions: `${formatInt(a.sessions)} ${a.sessions === 1 ? 'sessão' : 'sessões'}${a.subagents ? ` · ${formatInt(a.subagents)} sub` : ''}`,
         tokens: formatTokens(a.counts.tokensIn + a.counts.tokensOut),
-        cost: a.counts.costUSD > 0 ? formatUSD(a.counts.costUSD) : '—',
+        cost: codex ? null : a.counts.costUSD > 0 ? formatUSD(a.counts.costUSD) : '—',
+        codex,
       };
     });
 }

@@ -175,13 +175,13 @@ export class TopBar implements UiComponent {
     const waiting = this.counters.get('waiting')!.el as HTMLButtonElement;
     waiting.classList.toggle('is-active', c.waiting > 0);
     waiting.disabled = c.waiting === 0;
-    // Pedidos que dá para responder por aqui (hook de permissão): a dica diz quantos.
+    // Pedidos que dá para responder por aqui (hook de permissão: permissões e perguntas): a dica diz quantos.
     const answerable = permissionAgents(snap?.agents ?? []).length;
     waiting.classList.toggle('has-answer', answerable > 0);
     setTitle(
       waiting,
       answerable
-        ? `${WAITING_HINT}. ${answerable === 1 ? '1 pedido de permissão dá' : `${answerable} pedidos de permissão dão`} para responder por aqui: clique para ir até ${answerable === 1 ? 'ele' : 'cada um'} (P).`
+        ? `${WAITING_HINT}. ${answerable === 1 ? '1 pedido (permissão ou pergunta) dá' : `${answerable} pedidos (permissões ou perguntas) dão`} para responder por aqui: clique para ir até ${answerable === 1 ? 'ele' : 'cada um'} (P).`
         : `${WAITING_HINT}. Clique para ir até o primeiro.`,
     );
     this.renderShells(c.shells, now);

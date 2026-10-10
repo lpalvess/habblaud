@@ -1,7 +1,8 @@
-// Uso do plano (sessão de 5h e semanal) por conta, vindo de duas fontes locais:
+// Uso do plano (sessão de 5h e semanal) por conta, vindo de fontes locais:
 // - 'statusline': rate_limits que o Claude Code envia ao statusline, gravados pelo
 //   scripts/statusline-tap.mjs (recomendado: ao vivo);
-// - 'cache': cachedUsageUtilization gravado pelo próprio Claude Code (quando alguém roda /usage).
+// - 'cache': cachedUsageUtilization gravado pelo próprio Claude Code (quando alguém roda /usage);
+// - 'codex': rate_limits dos arquivos de sessão do Codex, empurrados pela fonte do Codex (AccountsService.setUsage).
 // Vale sempre a fonte com os números mais recentes (maior fetchedAt). Nenhuma delas lê credenciais
 // nem faz chamadas de rede: são só arquivos que o Claude Code já grava na máquina.
 import type { AccountInfo, AccountUsage, UsageWindow } from '../../shared/types';
@@ -103,6 +104,13 @@ export class UsageStore {
 
   clear(accountId: string, source: UsageSource): boolean {
     return this.entries.get(accountId)?.delete(source) ?? false;
+  }
+
+  /** Esquece todas as origens da conta (ela saiu). Devolve true se havia algo. */
+  forget(accountId: string): boolean {
+    const had = !!this.entries.get(accountId)?.size;
+    this.entries.delete(accountId);
+    return had;
   }
 
   view(accountId: string, now: number): UsageView {

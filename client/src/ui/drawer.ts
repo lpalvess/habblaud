@@ -1,7 +1,10 @@
-// Gaveta de detalhes (direita): agente ou sala selecionados.
+// Gaveta de detalhes (direita): agente ou sala selecionados. Agente do Codex: selo "Codex", textos dele (onde
+// responder, o terminal, a aprovação no lugar do modo de permissão, sem custo) e a dica dos hooks do Codex.
 import type { Activity, AgentInfo, FeedItem, RoomInfo, ShellJob, TaskItem } from '../../../shared/types';
 import { roomTheme } from '../art';
 import { createAvatarPlaceholder, updateAvatar } from './avatar';
+import { CharacterEditor } from './character-editor';
+import { MessageComposer } from './composer';
 import type { UiComponent, UiContext } from './context';
 import { copyText, h, iconButton, KeyedList, setAttr, setHidden, setStyleVar, setText, setTitle, setVariant } from './dom';
 import {
@@ -35,13 +38,27 @@ import {
   taskProgress,
   visibleShells,
 } from './model';
-import { PermissionCard } from './permission';
+import { isLocalHostname, PermissionCard } from './permission';
+import { canRenameRoom } from './roomrename';
+import { accountChipLabel, accountProvider, CODEX_LIVE_HINT, codexApprovalLabel, providerOf, showsPermissionsPluginHint } from './provider';
 import { createAgentRow, updateAgentRow } from './rows';
 import { SocialSection } from './social';
 import { TERMINAL_UNAVAILABLE_HINT, type TerminalControl } from './terminal';
-import { createAccountChip, createProgress, createStatusDot, updateAccountChip, updateProgress, updateStatusDot } from './widgets';
+import { Movable } from './movable';
+import { richText } from './usage';
+import {
+  createAccountChip,
+  createProgress,
+  createProviderTag,
+  createStatusDot,
+  updateAccountChip,
+  updateProgress,
+  updateProviderTag,
+  updateStatusDot,
+} from './widgets';
 
-const TIMELINE_LIMIT = 80;
+/** Itens da linha do tempo mostrados de início; "Mostrar mais" acrescenta outro tanto. */
+const TIMELINE_STEP = 15;
 const ROOM_FEED_LIMIT = 15;
 
 // ---------------------------------------------------------------- peças
@@ -176,7 +193,10 @@ class AgentView {
   private title: HTMLElement;
   private accChip: HTMLElement;
   private accName: HTMLElement;
+  private accProv: HTMLElement;
   private accEmail: HTMLElement;
+  /** Dica dos hooks do Codex (ao vivo e aprovar pelo escritório), na gaveta de um agente do Codex. */
+  private codexHint: HTMLElement;
   private roomBtn: HTMLButtonElement;
   private roomName: HTMLElement;
   private gone: HTMLElement;
@@ -188,7 +208,15 @@ class AgentView {
   private termLabel: HTMLElement;
   private alert: HTMLElement;
   private alertText: HTMLElement;
-  /** Pedido de permissão para responder por aqui (substitui o alerta genérico enquanto existe). */
+  /**
+   * Perguntas e opções do AskUserQuestion pendente, só para leitura: com o pedido no escritório (hook de
+   * permissão), quem aparece é o cartão de resposta, no lugar do alerta.
+   */
+  private alertQuestions: HTMLElement;
+  private alertQuestionsKey = '';
+  /** Dica de como responder as perguntas por aqui (o plugin de permissões). */
+  private alertAnswerHint: HTMLElement;
+  /** Pedido de permissão (ou pergunta) para responder por aqui (substitui o alerta genérico enquanto existe). */
   private perm: PermissionCard;
   private shellBox: HTMLElement;
   private shellText: HTMLElement;
@@ -201,6 +229,9 @@ class AgentView {
   private actTime: HTMLElement;
   private actDetails: HTMLDetailsElement;
   private actDetail: HTMLElement;
+  /** Mandar mensagem ao agente principal pelo Habblaud (plugin habblaud-mensagens). */
+  private composer: MessageComposer;
+  private msgSec: ReturnType<typeof section>;
   private tasksSec: ReturnType<typeof section>;
   private tasksBar: HTMLElement;
   private tasks: KeyedList<TaskItem>;
@@ -209,8 +240,13 @@ class AgentView {
   private teamEmpty: HTMLElement;
   private timeline: KeyedList<Activity>;
   private timelineSec: ReturnType<typeof section>;
+  private timelineMore: HTMLButtonElement;
+  private timelineLess: HTMLButtonElement;
+  /** Quantos itens da linha do tempo aparecem agora. */
+  private timelineShown = TIMELINE_STEP;
   private stats: KvList<StatKey>;
   private social: SocialSection;
+  readonly character: CharacterEditor;
   private sessionValue: HTMLElement;
   private linesPlus: HTMLElement;
   private linesMinus: HTMLElement;
@@ -225,14 +261,16 @@ class AgentView {
     this.title = h('p', { class: 'ui-hero__title' });
     this.accChip = createAccountChip('md');
     this.accName = h('span', { class: 'ui-hero__acc-name' });
+    this.accProv = createProviderTag('ui-prov--xs');
     this.accEmail = h('span', { class: 'ui-hero__acc-email' });
     this.roomName = h('span');
     this.roomBtn = h('button', { class: 'ui-room-link', type: 'button', on: { click: () => this.last && ctx.select({ type: 'room', id: this.last.roomId }, { focus: true }) } }, this.roomName);
+    this.character = new CharacterEditor(ctx);
     const heroText = h(
       'div',
       { class: 'ui-hero__text' },
-      h('div', { class: 'ui-hero__line' }, this.name, this.role),
-      h('div', { class: 'ui-hero__acc' }, this.accChip, this.accName, this.accEmail),
+      h('div', { class: 'ui-hero__line' }, this.name, this.character.button, this.role),
+      h('div', { class: 'ui-hero__acc' }, this.accChip, this.accName, this.accProv, this.accEmail),
       h('div', { class: 'ui-hero__where' }, h('span', { class: 'ui-muted', text: 'Sala' }), this.roomBtn),
     );
     this.gone = h('p', { class: 'ui-gone', text: 'Este agente já saiu do escritório.', hidden: true });
@@ -253,7 +291,7 @@ class AgentView {
       h('span', { class: 'ui-status__actions' }, this.followBtn, centerBtn),
     );
 
-    // Terminal somente leitura: a conversa da sessão como o Claude Code mostra (só com acesso local).
+    // Terminal: a conversa da sessão como o Claude Code mostra, ao vivo (só com acesso local).
     this.termLabel = h('span', { class: 'ui-term-cta__label', text: 'Abrir terminal' });
     const termIcon = h('span', { class: 'ui-term-cta__icon', attrs: { 'aria-hidden': 'true' } });
     termIcon.innerHTML = ICONS.terminal;
@@ -262,18 +300,19 @@ class AgentView {
       { class: 'ui-btn ui-term-cta', type: 'button', attrs: { 'aria-pressed': 'false' }, on: { click: () => this.toggleTerminal() } },
       termIcon,
       this.termLabel,
-      h('span', { class: 'ui-term-cta__ro', text: 'somente leitura' }),
       h('kbd', { class: 'ui-kbd', text: 'T', attrs: { 'aria-hidden': 'true' } }),
     );
 
     this.alertText = h('p', { class: 'ui-alert__text' });
+    this.alertQuestions = h('div', { class: 'ui-ask', hidden: true });
+    this.alertAnswerHint = h('p', { class: 'ui-ask__answer-hint', hidden: true, text: 'Com o plugin habblaud-permissoes (npm run mod:install), dá para responder as perguntas por aqui.' });
     const alertIcon = h('span', { class: 'ui-alert__icon', attrs: { 'aria-hidden': 'true' } });
     alertIcon.innerHTML = ICONS.hand;
     this.alert = h(
       'div',
       { class: 'ui-alert', role: 'alert', hidden: true },
       alertIcon,
-      h('div', {}, h('strong', { class: 'ui-alert__title', text: 'Precisa de você' }), this.alertText),
+      h('div', {}, h('strong', { class: 'ui-alert__title', text: 'Precisa de você' }), this.alertText, this.alertQuestions, this.alertAnswerHint),
     );
 
     // Esperando o shell: caixa de status (com a fase da espera no escritório) e a lista de comandos rodando.
@@ -298,6 +337,8 @@ class AgentView {
     this.actDetail = h('pre', { class: 'ui-mono' });
     this.actDetails = h('details', { class: 'ui-now__details' }, h('summary', { text: 'Detalhes' }), this.actDetail);
     const nowSec = section('Agora', h('div', { class: 'ui-now' }, this.actIcon, h('div', { class: 'ui-now__body' }, this.actText, this.actTime)), this.actDetails);
+    this.composer = new MessageComposer(ctx, 'drawer');
+    this.msgSec = section('Mandar mensagem', this.composer.el);
     this.social = new SocialSection(ctx);
     this.perm = new PermissionCard(ctx);
 
@@ -316,7 +357,9 @@ class AgentView {
     });
 
     const tl = h('ol', { class: 'ui-timeline' });
-    this.timelineSec = section('Linha do tempo', tl);
+    this.timelineMore = h('button', { class: 'ui-btn ui-btn--sm', type: 'button', on: { click: () => this.showTimeline(this.timelineShown + TIMELINE_STEP) } });
+    this.timelineLess = h('button', { class: 'ui-btn ui-btn--sm', type: 'button', text: 'Mostrar menos', on: { click: () => this.showTimeline(TIMELINE_STEP) } });
+    this.timelineSec = section('Linha do tempo', tl, h('div', { class: 'ui-timeline__more' }, this.timelineMore, this.timelineLess));
     this.timeline = new KeyedList<Activity>(tl, { key: (a) => a.id, create: createTimelineItem, update: (li, a) => updateTimelineItem(li, a, ctx.now()) });
 
     this.sessionValue = h('span', { class: 'ui-mono-inline' });
@@ -338,11 +381,13 @@ class AgentView {
       ['bg', 'Execução'],
     ]);
     const statsSec = section('Estatísticas', this.stats.el);
+    this.codexHint = h('p', { class: 'ui-codex-hint', hidden: true }, ...richText(CODEX_LIVE_HINT));
 
     this.el = h(
       'div',
       { class: 'ui-drawer__view ui-agent-view' },
       h('div', { class: 'ui-hero' }, this.avatar, heroText),
+      this.character.el,
       this.title,
       this.gone,
       statusRow,
@@ -352,11 +397,13 @@ class AgentView {
       this.shellBox,
       this.shellsSec.el,
       nowSec.el,
+      this.msgSec.el,
       this.social.el,
       this.tasksSec.el,
       this.teamSec.el,
       this.timelineSec.el,
       statsSec.el,
+      this.codexHint,
     );
   }
 
@@ -366,9 +413,11 @@ class AgentView {
 
   open(id: string): void {
     if (this.id === id) return;
+    this.character.open(id);
     this.id = id;
     this.last = null;
     this.history = [];
+    this.timelineShown = TIMELINE_STEP;
     this.timeline.clear();
     this.tasks.clear();
     this.team.clear();
@@ -387,10 +436,15 @@ class AgentView {
       });
   }
 
-  /** Abre (ou fecha) o terminal somente leitura deste agente; desligado sem acesso local ou depois que ele saiu. */
+  /** Abre (ou fecha) o terminal deste agente; desligado sem acesso local ou depois que ele saiu. */
   toggleTerminal(): void {
     if (!this.id || this.termBtn.getAttribute('aria-disabled') === 'true') return;
     this.terminal.toggle(this.id, this.termBtn);
+  }
+
+  private showTimeline(n: number): void {
+    this.timelineShown = Math.max(TIMELINE_STEP, n);
+    this.ctx.invalidate();
   }
 
   toggleFollow(): void {
@@ -409,19 +463,25 @@ class AgentView {
     const now = this.ctx.now();
     const account = this.ctx.account(a.account);
     const room = this.ctx.store.room(a.roomId);
+    const provider = providerOf(a);
+    const codex = provider === 'codex';
 
     updateAvatar(this.avatar, a, 'lg');
     setStyleVar(this.avatar, '--acc', account?.color ?? '#8b98b3');
     setText(this.name, a.name);
+    this.character.render(a, !!live);
     setText(this.role, roleLabel(a));
     setVariant(this.role, 'ui-role--', a.kind);
     setText(this.title, a.title ?? '');
     setHidden(this.title, !a.title);
     setTitle(this.title, a.title ?? '');
-    updateAccountChip(this.accChip, account, a.account);
+    updateAccountChip(this.accChip, account, a.account, a.provider);
     setText(this.accName, account?.name ?? a.account);
-    setText(this.accEmail, account?.email ?? '');
-    setHidden(this.accEmail, !account?.email);
+    updateProviderTag(this.accProv, provider, account?.name ?? '');
+    // E-mail (Claude Code) ou, no Codex (sem e-mail), o plano.
+    const accSub = account?.email ?? (codex && account?.plan ? `plano ${account.plan}` : '');
+    setText(this.accEmail, accSub);
+    setHidden(this.accEmail, !accSub);
     setText(this.roomName, room?.name ?? a.roomId);
     setTitle(this.roomBtn, room ? `${room.path}\nClique para ver a sala` : '');
     setHidden(this.gone, !!live);
@@ -446,11 +506,19 @@ class AgentView {
     this.perm.render(live);
     setHidden(this.alert, !waiting || this.perm.visible);
     if (waiting) {
-      setText(
-        this.alertText,
-        `Vá ao terminal da ${account?.name ?? a.account} em ${room?.name ?? 'seu projeto'} para responder${a.waitingFor ? `: ${a.waitingFor}` : '.'}`,
-      );
+      const accName = account?.name ?? a.account;
+      // Codex: "Vá ao Codex (Conta X)"; sem repetir quando a conta já se chama "Codex".
+      const where = codex ? `ao Codex${/codex/i.test(accName) ? '' : ` (${accName})`}` : `ao terminal da ${accName}`;
+      setText(this.alertText, `Vá ${where} em ${room?.name ?? 'seu projeto'} para responder${a.waitingFor ? `: ${a.waitingFor}` : '.'}`);
     }
+    // Perguntas do AskUserQuestion (só leitura): o Codex não pergunta pelo escritório.
+    const asking = waiting && !codex && a.activity?.kind === 'ask' ? a.activity : undefined;
+    this.renderQuestions(asking);
+    // Sem o pedido no escritório: dá para responder por aqui com o plugin (só com a trava local, como o cartão). O Codex
+    // não responde perguntas pelo escritório.
+    const answerable =
+      showsPermissionsPluginHint(a) && !!asking?.questions?.length && !this.perm.visible && !this.ctx.store.mock && !!this.ctx.store.snapshot?.meta.terminal && isLocalHostname(location.hostname);
+    setHidden(this.alertAnswerHint, !answerable);
 
     // Esperando o shell.
     setHidden(this.shellBox, !wait);
@@ -480,6 +548,9 @@ class AgentView {
     const detail = act?.detail ?? '';
     setHidden(this.actDetails, !detail);
     setText(this.actDetail, detail);
+
+    // Mandar mensagem: só para principais presentes (com o recurso ligado e a página local; sem o plugin, a dica).
+    setHidden(this.msgSec.el, this.composer.render(live, this.id) === 'off');
 
     // Vida social (personalidade, carteira, rodas): só de quem está no escritório.
     if (live) this.social.render(a.id, now);
@@ -511,14 +582,48 @@ class AgentView {
 
     // Linha do tempo (mais recente primeiro).
     this.history = mergeHistory(this.history, a.recent);
-    const items = this.history.slice(-TIMELINE_LIMIT).reverse();
+    const items = this.history.slice(-this.timelineShown).reverse();
+    const hiddenCount = Math.max(0, this.history.length - this.timelineShown);
+    setHidden(this.timelineMore, hiddenCount === 0);
+    setText(this.timelineMore, `Mostrar mais ${Math.min(TIMELINE_STEP, hiddenCount)}`);
+    setHidden(this.timelineLess, this.timelineShown <= TIMELINE_STEP || this.history.length <= TIMELINE_STEP);
     this.timeline.sync(items);
     setText(this.timelineSec.extra, this.history.length ? String(this.history.length) : '');
 
     this.renderStats(a, now);
+
+    // Codex: como ter o ao vivo e as aprovações por aqui (o servidor ainda não diz se os hooks dele estão ligados).
+    setHidden(this.codexHint, !codex || a.kind !== 'main' || !live || this.ctx.store.replaying);
   }
 
-  private renderTerminalButton(live: boolean): void {
+  /** Lista as perguntas pendentes com as opções, só para leitura (sem o pedido no escritório, a resposta é no Claude Code). */
+  private renderQuestions(act: Activity | undefined): void {
+    const qs = act?.questions ?? [];
+    setHidden(this.alertQuestions, qs.length === 0);
+    const key = qs.length ? `${act!.id}|${qs.length}` : '';
+    if (key === this.alertQuestionsKey) return;
+    this.alertQuestionsKey = key;
+    this.alertQuestions.replaceChildren(
+      ...qs.map((q) =>
+        h(
+          'div',
+          { class: 'ui-ask__q' },
+          q.header ? h('span', { class: 'ui-ask__tag', text: q.header }) : null,
+          h('p', { class: 'ui-ask__question', text: q.question }),
+          q.multiSelect ? h('p', { class: 'ui-ask__hint', text: 'Pode escolher mais de uma' }) : null,
+          h(
+            'ol',
+            { class: 'ui-ask__opts' },
+            ...q.options.map((o) =>
+              h('li', {}, h('strong', { text: o.label }), o.description ? h('span', { class: 'ui-ask__desc', text: o.description }) : null),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  private renderTerminalButton(live: boolean, provider = providerOf(this.last)): void {
     const available = !!this.ctx.store.snapshot?.meta.terminal;
     const open = this.terminal.agentId === this.id;
     // aria-disabled (e não disabled): o botão continua focável e a dica do porquê aparece no hover.
@@ -531,14 +636,14 @@ class AgentView {
     setTitle(
       this.termBtn,
       open
-        ? 'Fechar o terminal somente leitura (T)'
+        ? 'Fechar o terminal (T)'
         : !available
           ? this.ctx.store.replaying
             ? 'Sem terminal no timelapse: a conversa é a de agora, não a do momento reproduzido.'
             : TERMINAL_UNAVAILABLE_HINT
           : !live
             ? 'O agente já saiu do escritório.'
-            : 'Ver a conversa desta sessão como no terminal do Claude Code, só para leitura (T)',
+            : `Ver a conversa desta sessão como no ${provider === 'codex' ? 'Codex' : 'terminal do Claude Code'}, ao vivo (T)`,
     );
   }
 
@@ -549,6 +654,7 @@ class AgentView {
     st.set('tokensIn', formatTokens(s.tokensIn));
     st.set('tokensOut', formatTokens(s.tokensOut));
     st.set('cost', s.costUSD !== undefined ? formatUSD(s.costUSD) : null);
+    const codex = providerOf(a) === 'codex';
     const hasLines = s.linesAdded !== undefined || s.linesRemoved !== undefined;
     st.show('lines', hasLines);
     setText(this.linesPlus, `+${formatInt(s.linesAdded ?? 0)}`);
@@ -556,7 +662,10 @@ class AgentView {
     st.set('subs', a.kind === 'main' ? formatInt(s.subagents) : null);
     st.set('model', prettyModel(a.model));
     st.set('branch', a.gitBranch ?? null);
-    st.set('perm', a.kind === 'main' ? permissionLabel(a.permissionMode) : null);
+    // Codex: a política de aprovação (quando o servidor a manda) no lugar do modo de permissão do Claude Code.
+    st.label('perm', codex ? 'Aprovações' : 'Permissões');
+    st.set('perm', a.kind !== 'main' ? null : codex ? (a.permissionMode ? codexApprovalLabel(a.permissionMode) : null) : permissionLabel(a.permissionMode));
+
     setText(this.sessionValue, a.sessionId);
     setTitle(this.sessionValue, a.sessionId);
     st.set('start', formatDateTime(a.startedAt));
@@ -583,6 +692,11 @@ class KvList<K extends string> {
     }
   }
 
+  /** Troca o rótulo da linha (ex.: "Aprovações" no Codex). */
+  label(key: K, text: string): void {
+    setText(this.rows.get(key)!.dt, text);
+  }
+
   /** Define o texto da linha; `null` oculta a linha. */
   set(key: K, value: string | null): void {
     const r = this.rows.get(key)!;
@@ -605,6 +719,7 @@ class RoomView {
   private last: RoomInfo | null = null;
   private swatch: HTMLElement;
   private name: HTMLElement;
+  private renameBtn: HTMLButtonElement;
   private path: HTMLElement;
   private gone: HTMLElement;
   private accs: KeyedList<string>;
@@ -620,6 +735,16 @@ class RoomView {
   constructor(private ctx: UiContext) {
     this.swatch = h('span', { class: 'ui-room-hero__swatch', attrs: { 'aria-hidden': 'true' } });
     this.name = h('h2', { class: 'ui-hero__name' });
+    // Lápis: o mesmo campo do botão direito na sala (ui/roomrename.ts), aberto embaixo do nome.
+    this.renameBtn = iconButton(
+      ICONS.pencil,
+      'Renomear sala',
+      () => {
+        const r = this.name.getBoundingClientRect();
+        ctx.renameRoom?.(this.id, { x: r.left, y: r.bottom + 6 });
+      },
+      'ui-icon-btn--sm ui-room-hero__rename',
+    );
     this.path = h('span', { class: 'ui-room-hero__path' });
     const centerBtn = h('button', { class: 'ui-btn', type: 'button', title: 'Levar a câmera até a sala', on: { click: () => ctx.focusSelection() } });
     centerBtn.innerHTML = ICONS.center;
@@ -634,7 +759,8 @@ class RoomView {
       update: (el, id) => {
         const acc = ctx.account(id);
         updateAccountChip(el.firstElementChild as HTMLElement, acc, id);
-        setText(el.lastElementChild!, acc ? `${acc.name}${acc.email ? ` · ${acc.email}` : ''}` : id);
+        // "Conta C · dev@x.com"; no Codex, "Codex · plano Team".
+        setText(el.lastElementChild!, accountChipLabel(acc, id, accountProvider(acc, id)).replace(/ \((.+)\)$/, ' · $1'));
       },
     });
 
@@ -663,7 +789,7 @@ class RoomView {
         'div',
         { class: 'ui-room-hero' },
         this.swatch,
-        h('div', { class: 'ui-hero__text' }, this.name, h('span', { class: 'ui-copy-row' }, this.path, copyButton(() => this.last?.path ?? '', 'Copiar caminho'))),
+        h('div', { class: 'ui-hero__text' }, h('div', { class: 'ui-room-hero__title' }, this.name, this.renameBtn), h('span', { class: 'ui-copy-row' }, this.path, copyButton(() => this.last?.path ?? '', 'Copiar caminho'))),
       ),
       this.gone,
       h('div', { class: 'ui-status' }, accsEl, h('span', { class: 'ui-status__actions' }, centerBtn)),
@@ -700,6 +826,7 @@ class RoomView {
       // Sem tema: cor padrão.
     }
     setHidden(this.gone, !!live);
+    setHidden(this.renameBtn, !live || !canRenameRoom(this.ctx, r.id));
 
     const snap = this.ctx.store.snapshot;
     const agents = (snap?.agents ?? []).filter((a) => a.roomId === r.id);
@@ -730,6 +857,9 @@ export class Drawer implements UiComponent {
   private roomView: RoomView;
   private mode: 'agent' | 'room' | null = null;
   private heading: HTMLElement;
+  private movable: Movable;
+  /** Avisado quando a gaveta é solta ou volta ao lugar (a área livre do escritório muda). */
+  onLayoutChange: (() => void) | null = null;
 
   constructor(
     private ctx: UiContext,
@@ -740,17 +870,25 @@ export class Drawer implements UiComponent {
     this.heading = h('span', { class: 'ui-drawer__kind' });
     const close = iconButton(ICONS.close, 'Fechar detalhes (Esc)', () => ctx.select(null));
     this.body = h('div', { class: 'ui-drawer__body' });
+    const bar = h('div', { class: 'ui-drawer__bar' }, this.heading, close);
     this.el = h(
       'aside',
       { class: 'ui-panel ui-drawer', attrs: { 'aria-label': 'Detalhes', id: 'ui-drawer', 'aria-hidden': 'true' } },
-      h('div', { class: 'ui-drawer__bar' }, this.heading, close),
+      bar,
       this.body,
     );
+    // Arrastar pela barra solta a gaveta: flutuante, ela não cobre mais a lateral do escritório.
+    this.movable = new Movable(this.el, bar, { key: 'habblaud.move.drawer', enabled: () => !ctx.isNarrow(), onChange: () => this.onLayoutChange?.() });
     this.el.inert = true;
   }
 
   get isOpen(): boolean {
     return this.mode !== null;
+  }
+
+  /** Solta do lugar (arrastada pela barra). */
+  get floating(): boolean {
+    return this.movable.floating;
   }
 
   toggleFollow(): void {
@@ -761,6 +899,8 @@ export class Drawer implements UiComponent {
     const sel = this.ctx.selection();
     const mode = sel?.type ?? null;
     if (mode !== this.mode) {
+      // Gaveta fechada ou fora do agente: o editor fecha, e ao reabrir começa do estado atual do agente.
+      if (this.mode === 'agent') this.agentView.character.close();
       this.mode = mode;
       this.body.replaceChildren(...(mode === 'agent' ? [this.agentView.el] : mode === 'room' ? [this.roomView.el] : []));
       this.body.scrollTop = 0;

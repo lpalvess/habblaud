@@ -1,9 +1,10 @@
 // Histórico do terminal (rotas /api/sessions/*): a trava (recurso desligado ou Host que não é local = 403),
 // a validação de conta/id/caminho contra path traversal (400/404), métodos (405) e o SSE de uma sessão
-// encerrada (init com a conversa do transcript, append do que for acrescentado), com o parser real.
+// encerrada (init com a conversa do transcript, append do que for acrescentado), com o parser real. Como no
+// servidor, as rotas passam pelo HistorySet (o do Claude Code e, num teste, o de outra ferramenta).
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { RecentSessionsResponse, TerminalEntry, TerminalInit } from '../../shared/types';
@@ -12,8 +13,9 @@ import { setQuiet } from '../log';
 import { NameStore } from '../model/names';
 import { Office } from '../model/office';
 import { openMainAgent, SessionHistory } from '../sources/history';
+import { HistorySet, type HistoryProvider } from '../sources/source';
 import { encodeCwd } from '../sources/watcher';
-import { appendLines, L, tempDir, writeLines } from '../test/fixtures';
+import { appendLines, L, symlinkOrSkip, tempDir, writeLines } from '../test/fixtures';
 import { createApiHandler } from './app';
 import { createRequestGuard } from './guard';
 import { Hub } from './sse';
@@ -35,7 +37,7 @@ interface Served {
   close: () => Promise<void>;
 }
 
-async function serve(opts: { terminal?: boolean } = {}): Promise<Served> {
+async function serve(opts: { terminal?: boolean; extra?: (root: string) => HistoryProvider } = {}): Promise<Served> {
   const tmp = tempDir();
   const terminal = opts.terminal ?? true;
   const dir = join(tmp.dir, '.claude');
@@ -60,7 +62,8 @@ async function serve(opts: { terminal?: boolean } = {}): Promise<Served> {
   office.addMain({ id: '.claude:7', account: '.claude', sessionId: OPEN_SID, cwd: CWD, role: 'Agente principal', startedAt: now, status: 'working' });
   const hub = new Hub(office, { throttleMs: 10 });
   const terminals = new TerminalStreams({ office, transcriptPathOf: () => undefined, sessionPollMs: 20 });
-  const history = new SessionHistory({ accounts: () => accounts.entries(), openAgentOf: (acc, sid) => openMainAgent(office.list(), acc, sid) });
+  const history = new HistorySet([new SessionHistory({ accounts: () => accounts.entries(), openAgentOf: (acc, sid) => openMainAgent(office.list(), acc, sid) })]);
+  if (opts.extra) history.add(opts.extra(tmp.dir));
   const api = createApiHandler({ office, hub, accounts, sources: () => [], version: 't', inDocker: false, terminal, terminals, sessions: history });
   const guard = createRequestGuard({ allowedHosts: new Set(['habblaud.lan']) });
   const server = http.createServer((req, res) => {
@@ -206,7 +209,7 @@ describe('histórico de sessões: listagem', () => {
 });
 
 describe('histórico de sessões: validação (path traversal)', () => {
-  it('id que não é UUID: 400; conta desconhecida ou fora de projects/: 404; nunca abre o arquivo de fora', async () => {
+  it('id que não é UUID: 400; conta desconhecida ou fora de projects/: 404; nunca abre o arquivo de fora', async ({ skip }) => {
     const env = await serve();
     try {
       writeFileSync(join(env.root, 'segredo.jsonl'), `${L.prompt('não pode sair')}\n`);
@@ -239,12 +242,60 @@ describe('histórico de sessões: validação (path traversal)', () => {
       }
       // Link dentro de projects/ apontando para fora: 404.
       const linked = '00000000-0000-4000-8000-0000000000c3';
-      symlinkSync(join(env.root, 'segredo.jsonl'), join(env.dir, 'projects', encodeCwd(CWD), `${linked}.jsonl`));
+      symlinkOrSkip(skip, join(env.root, 'segredo.jsonl'), join(env.dir, 'projects', encodeCwd(CWD), `${linked}.jsonl`));
       mkdirSync(join(env.dir, 'projects', 'vazio'), { recursive: true });
       const r = await request(env.base, terminalRoute('.claude', linked));
       expect(r.status).toBe(404);
       expect(JSON.parse(r.body)).toEqual({ error: 'sessão não encontrada' });
       expect(env.terminals.size).toBe(0);
+    } finally {
+      await env.close();
+    }
+  });
+});
+
+describe('histórico de sessões: outra ferramenta', () => {
+  const XID = '019a0000-0000-7000-8000-0000000000d4';
+  /** Provedor fictício da conta ".codex": uma sessão, lida com um parser próprio (cada linha vira "cx-<n>"). */
+  const codexHistory = (root: string): HistoryProvider => {
+    const path = join(root, 'rollout.jsonl');
+    writeFileSync(path, 'a\nb\n');
+    let n = 0;
+    return {
+      provider: 'codex',
+      hasAccount: (a) => a === '.codex',
+      list: async () => [{ account: '.codex', provider: 'codex', sessionId: XID, projectDir: '2026/10/09', lastAt: Date.now() + 60_000, size: 4, open: false }],
+      resolve: (_account, sessionId) =>
+        sessionId === XID
+          ? { path, createParser: () => ({ push: (): TerminalEntry[] => [{ kind: 'user', id: `cx-${++n}`, at: 0, text: 'cx' }] }) }
+          : { status: 404, error: 'sessão não encontrada' },
+    };
+  };
+
+  it('listagem junta as ferramentas; o terminal da sessão usa o parser da ferramenta dela', async () => {
+    const env = await serve({ extra: codexHistory });
+    try {
+      const body = JSON.parse((await request(env.base, '/api/sessions/recent')).body) as RecentSessionsResponse;
+      expect(body.sessions.map((s) => [s.account, s.sessionId, s.provider])).toEqual([
+        ['.codex', XID, 'codex'],
+        ['.claude', OPEN_SID, undefined],
+        ['.claude', SID, undefined],
+      ]);
+      const s = await request(env.base, terminalRoute('.codex', XID));
+      expect(s.status).toBe(200);
+      await waitFor(() => expect(s.events.filter((e) => e.event === 'init')).toHaveLength(1));
+      const init = s.events[0].data as TerminalInit;
+      expect(init.agentId).toBe(`session:.codex:${XID}`);
+      expect(init.entries.map((e) => e.id)).toEqual(['cx-1', 'cx-2']);
+      s.close();
+      // A conta do Claude Code continua com o parser dele; a desconhecida, com os erros de sempre.
+      const c = await request(env.base, terminalRoute('.claude', SID));
+      await waitFor(() => expect(c.events.filter((e) => e.event === 'init')).toHaveLength(1));
+      expect((c.events[0].data as TerminalInit).entries.map((e) => e.kind)).toEqual(['user', 'assistant']);
+      c.close();
+      expect((await request(env.base, terminalRoute('.codex', '00000000-0000-4000-8000-000000000999'))).status).toBe(404);
+      expect(JSON.parse((await request(env.base, terminalRoute('.outra', SID))).body)).toEqual({ error: 'conta desconhecida' });
+      expect((await request(env.base, terminalRoute('.outra', 'x'))).status).toBe(400);
     } finally {
       await env.close();
     }

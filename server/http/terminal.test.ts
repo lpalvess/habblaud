@@ -1,4 +1,4 @@
-// Terminal somente leitura: a trava da config (só bind local), os status da rota, o transporte SSE
+// Terminal: a trava da config (só bind local), os status da rota, o transporte SSE
 // (init/append/reset/limite) com um JSONL temporário e parser injetado, o demo e o caminho do transcript
 // que o watcher informa.
 import http from 'node:http';
@@ -22,7 +22,7 @@ import { MAX_STREAMS, TerminalStreams, type TerminalOptions } from './terminal';
 
 setQuiet(true);
 
-describe('trava do terminal somente leitura (config)', () => {
+describe('trava do terminal (config)', () => {
   it('isLoopbackBind: 127.0.0.0/8, ::1 e localhost', () => {
     for (const v of ['127.0.0.1', '127.1.2.3', ' 127.0.0.1 ', '::1', '[::1]', '0:0:0:0:0:0:0:1', 'localhost', 'LocalHost']) expect(isLoopbackBind(v)).toBe(true);
     for (const v of [undefined, '', '0.0.0.0', '::', '[::]', '192.168.0.10', '10.0.0.5', 'fe80::1', '128.0.0.1', 'meu-mac.local', 'app.localhost', '127.0.0.1.nip.io']) {
@@ -221,7 +221,7 @@ const waitFor = (fn: () => void) => vi.waitFor(fn, { timeout: 3_000, interval: 1
 
 // ------------------------------------------------------------------ rota
 
-describe('terminal somente leitura: rota', () => {
+describe('terminal: rota', () => {
   it('recurso desligado: 403 JSON; /api/health e meta.terminal dizem false', async () => {
     const env = await serve({ terminal: false });
     try {
@@ -307,7 +307,7 @@ describe('terminal somente leitura: rota', () => {
 
 // ------------------------------------------------------------------ transporte
 
-describe('terminal somente leitura: transporte', () => {
+describe('terminal: transporte', () => {
   it('init com a conversa do transcript; depois append só com as linhas novas', async () => {
     const env = await serve();
     try {
@@ -444,11 +444,53 @@ describe('terminal somente leitura: transporte', () => {
       await env.close();
     }
   });
+
+  it('parser por agente (parserFor, o da ferramenta dele); sem parser próprio, o padrão; um novo a cada init', async () => {
+    const OTHER = '.codex:019a0000-0000-7000-8000-000000000001';
+    let codexParsers = 0;
+    /** Parser "de outra ferramenta": as mesmas linhas viram entradas com o prefixo "cx-". */
+    const codexParser = (): TerminalParser => {
+      codexParsers++;
+      const base = fakeParser();
+      return { push: (raw) => base.push(raw).map((e) => ({ ...e, id: `cx-${e.id}` })) };
+    };
+    const asked: string[] = [];
+    const parserFor = (id: string) => (asked.push(id), id === OTHER ? codexParser() : undefined);
+    const env = await serve({ streams: { parserFor } });
+    try {
+      env.office.addMain({ id: OTHER, provider: 'codex', account: '.codex', sessionId: 'thr', cwd: '/p/loja', role: 'Agente principal', startedAt: Date.now(), status: 'working' });
+      const a = join(env.dir, 'a.jsonl');
+      const b = join(env.dir, 'b.jsonl');
+      writeLines(a, [line('a1')]);
+      writeLines(b, [line('b1')]);
+      env.paths.set(MAIN, a);
+      env.paths.set(OTHER, b);
+      const sa = await open(env.base, route(MAIN));
+      const sb = await open(env.base, route(OTHER));
+      await waitFor(() => expect(view(sa)).toEqual(['a1']));
+      await waitFor(() => expect(view(sb)).toEqual(['cx-b1']));
+      appendLines(b, [line('b2')]);
+      await waitFor(() => expect(view(sb)).toEqual(['cx-b1', 'cx-b2']));
+      expect(codexParsers).toBe(1);
+      // Truncado: parser novo, de novo o da ferramenta.
+      truncateSync(b, 0);
+      appendLines(b, [line('b3')]);
+      await waitFor(() => expect(view(sb)).toEqual(['cx-b3']));
+      expect(codexParsers).toBe(inits(sb).length);
+      expect(asked).toContain(MAIN);
+      expect(env.office.get(OTHER)?.provider).toBe('codex');
+      expect(env.office.get(MAIN)?.provider).toBeUndefined();
+      sa.close();
+      sb.close();
+    } finally {
+      await env.close();
+    }
+  });
 });
 
 // ------------------------------------------------------------------ demo
 
-describe('terminal somente leitura: agentes do demo', () => {
+describe('terminal: agentes do demo', () => {
   it('conversa fictícia (demoTerminalEntries): init com o id do agente', async () => {
     const env = await serve();
     try {

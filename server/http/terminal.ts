@@ -1,10 +1,11 @@
-// Terminal somente leitura (Server-Sent Events) em GET /api/agents/:id/terminal: a conversa da sessão
+// Terminal (Server-Sent Events) em GET /api/agents/:id/terminal: a conversa da sessão
 // (prompts, respostas, ferramentas e resultados) reconstruída do transcript JSONL por sources/terminal.ts.
 // Eventos nomeados: init | append (o `data` é o de TerminalMessage em shared/types.ts). A rota
 // (http/app.ts) já conferiu que o recurso está ligado e que o acesso é local.
 //
-// Cada conexão tem o próprio FileTail e o próprio parser: ao conectar, lê o fim do transcript (≈4 MB,
-// últimas 500 entradas) e manda `init`; depois, polling de ~400 ms manda `append` com o que for novo.
+// Cada conexão tem o próprio FileTail e o próprio parser (o da ferramenta do agente: SourceSet.parserFor; o do
+// Claude Code por padrão): ao conectar, lê o fim do transcript (≈4 MB, últimas 500 entradas) e manda `init`;
+// depois, polling de ~400 ms manda `append` com o que for novo.
 // Transcript truncado/substituído (ou trocado por /clear no mesmo processo) = parser novo e `init` de
 // novo. Agentes do demo não têm transcript: a conversa fictícia sai de demoTerminalEntries a cada ~500 ms.
 // Sessões do histórico (GET /api/sessions/:conta/:sessionId/terminal, http/sessions.ts) usam o mesmo
@@ -40,9 +41,14 @@ const DEMO_PREFIX = 'demo:';
 
 export interface TerminalOptions {
   office: Office;
-  /** Caminho do transcript de um agente real (ClaudeWatcher.transcriptPathOf). */
+  /** Caminho do transcript de um agente real (SourceSet.transcriptPathOf). */
   transcriptPathOf: (agentId: string) => string | undefined;
-  /** Fábrica do parser (testes); padrão: createTerminalParser. */
+  /**
+   * Parser da conversa de um agente real (SourceSet.parserFor): um NOVO a cada chamada. Ausente, ou undefined,
+   * = createParser.
+   */
+  parserFor?: (agentId: string) => TerminalParser | undefined;
+  /** Fábrica do parser padrão (testes); padrão: createTerminalParser (o do Claude Code). */
   createParser?: () => TerminalParser;
   /** Conversa fictícia dos agentes do demo (testes); padrão: demoTerminalEntries. */
   demoEntries?: (agent: AgentInfo, history: Activity[]) => TerminalEntry[];
@@ -77,7 +83,7 @@ function parseInto(parser: TerminalParser, lines: readonly string[], out: Termin
     try {
       entries = parser.push(line);
     } catch (err) {
-      log.warnOnce(`terminal-parse:${errMsg(err)}`, `Terminal somente leitura: linha do transcript ignorada (${errMsg(err)}).`);
+      log.warnOnce(`terminal-parse:${errMsg(err)}`, `Terminal: linha do transcript ignorada (${errMsg(err)}).`);
       continue;
     }
     for (const e of entries) out.push(e);
@@ -230,10 +236,11 @@ export class TerminalStreams {
 
   /**
    * Abre a conversa de uma sessão do histórico pelo transcript `path` (a rota já validou conta, id e caminho).
-   * `streamId` vai no `init` (ex.: "session:<conta>:<sessionId>"). Mesmos erros de attach (429/500).
+   * `streamId` vai no `init` (ex.: "session:<conta>:<sessionId>"); `createParser` é o da ferramenta da sessão
+   * (HistorySession.createParser; padrão: o do Claude Code). Mesmos erros de attach (429/500).
    */
-  attachSession(req: IncomingMessage, res: ServerResponse, streamId: string, path: string): void {
-    const o = { transcriptPathOf: () => undefined, createParser: this.createParser, initTailBytes: this.initTailBytes, initEntries: this.initEntries };
+  attachSession(req: IncomingMessage, res: ServerResponse, streamId: string, path: string, createParser?: () => TerminalParser): void {
+    const o = { transcriptPathOf: () => undefined, createParser: createParser ?? this.createParser, initTailBytes: this.initTailBytes, initEntries: this.initEntries };
     this.serve(req, res, streamId, new TranscriptSource(streamId, path, o, this.sessionPollMs));
   }
 
@@ -281,7 +288,9 @@ export class TerminalStreams {
     if (office.has(agentId)) {
       const path = this.opts.transcriptPathOf(agentId);
       if (!path) return 'transcript do agente não encontrado';
-      const o = { transcriptPathOf: this.opts.transcriptPathOf, createParser: this.createParser, initTailBytes: this.initTailBytes, initEntries: this.initEntries };
+      const parserFor = this.opts.parserFor;
+      const createParser = parserFor ? () => parserFor(agentId) ?? this.createParser() : this.createParser;
+      const o = { transcriptPathOf: this.opts.transcriptPathOf, createParser, initTailBytes: this.initTailBytes, initEntries: this.initEntries };
       return new TranscriptSource(agentId, path, o, this.pollMs);
     }
     // Os agentes do demo não estão entre os reais do Office, mas office.detail os encontra.

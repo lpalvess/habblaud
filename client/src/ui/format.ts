@@ -214,6 +214,15 @@ export function normalizeSearch(s: string): string {
 /** Nome curto do modelo: "claude-opus-5-5" -> "Opus 5.5". Mantém o original se não reconhecer. */
 export function prettyModel(model: string | undefined): string {
   if (!model) return '—';
+  // Codex: "gpt-5.3-codex" -> "GPT-5.3 Codex", "gpt-5.1-codex-mini" -> "GPT-5.1 Codex Mini", "gpt-5" -> "GPT-5".
+  const gpt = /^gpt-(\d+(?:\.\d+)?[a-z]?)((?:-[a-z][a-z0-9]*)*)$/i.exec(model);
+  if (gpt) {
+    const words = gpt[2]
+      .split('-')
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+    return [`GPT-${gpt[1]}`, ...words].join(' ');
+  }
   // Formatos: "claude-opus-5-5", "claude-sonnet-4-5-20250929", "claude-opus-4-20250514", "claude-3-5-sonnet-20241022".
   const m = /claude-(?:(\d{1,2}(?:-\d{1,2})?)-)?([a-z]+)(?:-(\d{1,2})(?!\d)(?:-(\d{1,2})(?!\d))?)?/i.exec(model);
   if (!m) return model;

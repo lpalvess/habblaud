@@ -1,4 +1,4 @@
-// Markdown pequeno e seguro para as respostas do agente no terminal somente leitura.
+// Markdown pequeno e seguro para as respostas do agente no terminal.
 // O tokenizador (blocos e trechos inline) é puro e testado em ui/markdown.test.ts; a montagem usa só
 // createElement/textContent: nenhum texto do transcript passa por innerHTML.
 //

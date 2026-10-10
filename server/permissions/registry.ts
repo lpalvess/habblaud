@@ -6,14 +6,23 @@
 // - só aceita o pedido se alguma página local estiver aberta e a sessão for conhecida (senão o hook sai
 //   na hora e o terminal segue normal);
 // - publica o pedido no agente (AgentInfo.permission, via Office) e avisa no feed;
-// - entrega a decisão ao hook (allow/deny) ou o libera sem decisão ("responder no terminal");
+// - entrega a decisão ao hook (allow/deny, ou as respostas de um AskUserQuestion) ou o libera sem decisão
+//   ("responder no terminal");
 // - descarta pedidos órfãos: tempo limite do hook, hook que morreu (sem ninguém esperando), agente que
 //   saiu e pedido respondido no próprio terminal (o tool_result aparece no transcript).
+//
+// O Codex usa as mesmas rotas (hook PermissionRequest de mod/habblaud-codex/hook.mjs, com `provider: "codex"` e a
+// conta no corpo). Diferenças: o agente casa pelo thread (agent_id ?? session_id) entre os agentes do Codex; sem
+// sugestões nem perguntas; recusar só com motivo (sem interromper); sem a busca da resposta no transcript (no Codex o
+// terminal só pede a aprovação depois que o hook termina, então ela nunca é respondida lá enquanto ele espera).
 import { randomBytes } from 'node:crypto';
 import { describeTool, maskSecrets, truncate } from '../../shared/activity';
-import type { Activity, AgentInfo, PermissionDecision, PermissionRequestInfo, PermissionSuggestionInfo } from '../../shared/types';
+import { ANSWER_OTHER_MAX, answerSummary, ASK_TOOL, checkAnswers } from '../../shared/answers';
+import type { Activity, AgentInfo, PermissionAnswer, PermissionDecision, PermissionRequestInfo, PermissionSuggestionInfo } from '../../shared/types';
 import { errMsg, log } from '../log';
 import { toolView } from '../sources/terminal';
+import { codexToolView } from './codex';
+import { opencodeToolView } from './opencode';
 import { callSignature, scanToolCall } from './transcript';
 
 /** Tempo que o hook espera por padrão (ele manda o próprio em `timeout_ms`). */
@@ -33,13 +42,13 @@ export const SCAN_EVERY_MS = 1_000;
 /** Principal que esperava (diálogo aberto) e deixou de esperar há este tempo: respondeu no terminal. */
 export const LEFT_WAITING_MS = 3_000;
 export const MAX_PENDING = 32;
-/** Ferramentas que o hook não manda: a resposta é uma escolha do usuário, não aprovar/recusar. */
-export const UNSUPPORTED_TOOLS = new Set(['AskUserQuestion']);
 
 const DESTINATIONS = new Set(['session', 'localSettings', 'projectSettings', 'userSettings']);
 const MAX_SUGGESTIONS = 4;
 const MAX_MESSAGE = 1_000;
 const RULE_MAX = 160;
+/** Respostas numa decisão `answer` (o AskUserQuestion faz até 4 perguntas). */
+const MAX_ANSWERS = 4;
 
 /** O que o registro usa do Office (interface mínima: facilita os testes). */
 export interface OfficeLike {
@@ -47,8 +56,8 @@ export interface OfficeLike {
   list(): AgentInfo[];
   markDirty(): void;
   addActivity(id: string, activity: Activity, current: boolean, opts?: { feed?: boolean }): void;
-  /** Aviso "pede permissão" (mesmo dedupe do aviso "precisa de você" do status). */
-  noticePermission(id: string, what: string): void;
+  /** Aviso "pede permissão" ou "tem uma pergunta" (mesmo dedupe do aviso "precisa de você" do status). */
+  noticePermission(id: string, what: string, kind?: 'permission' | 'question'): void;
 }
 
 export interface RegistryOptions {
@@ -57,6 +66,11 @@ export interface RegistryOptions {
   viewers: () => number;
   /** Transcript de um agente presente (ClaudeWatcher.transcriptPathOf). */
   transcriptPathOf?: (agentId: string) => string | undefined;
+  /**
+   * Conta do Codex (AgentInfo.account) de um pedido do hook do Codex, pela pasta CODEX_HOME que ele manda (o basename
+   * que o hook calcula não sabe dos ids desambiguados, ex. ".codex~2"). undefined = vale a conta do hook.
+   */
+  codexAccount?: (account: string | undefined, codexHome: string | undefined) => string | undefined;
   /** Decisão para um pedido fictício do demo (Office.decideDemoPermission); true = era do demo. */
   demoDecide?: (id: string, d: PermissionDecision) => boolean;
   /** Detalhe de um pedido fictício do demo (o snapshot já o traz). */
@@ -73,13 +87,22 @@ export type SkipReason = 'no-viewers' | 'unknown-session' | 'unsupported-tool' |
 export type RegisterResult = { id: string; expiresAt: number } | { skip: SkipReason };
 export type ReleaseReason = 'terminal' | 'answered' | 'expired' | 'orphan' | 'gone' | 'shutdown';
 
-/** Resposta de uma espera do hook. */
+/**
+ * Resposta de uma espera do hook. `answer`: as respostas por posição (o hook as troca pelos textos originais
+ * do AskUserQuestion que recebeu do Claude Code).
+ */
 export type WaitResult =
   | { status: 'pending' }
   | { status: 'decided'; behavior: 'allow' | 'deny'; message?: string; interrupt?: boolean; suggestion?: number }
+  | { status: 'decided'; behavior: 'answer'; answers: PermissionAnswer[] }
   | { status: 'released'; reason: ReleaseReason };
 
-export type DecideResult = 'ok' | 'not-found' | 'conflict' | 'invalid';
+/**
+ * invalid = sugestão de regra desconhecida; invalid-answer = decisão que não serve para o tipo de pedido (pergunta
+ * se responde com `answer`, e só ela) ou respostas que não batem com as perguntas; unsupported = o Codex não aceita
+ * (interromper ou "sempre permitir").
+ */
+export type DecideResult = 'ok' | 'not-found' | 'conflict' | 'invalid' | 'invalid-answer' | 'unsupported';
 
 /** Erro de validação do corpo vindo do hook (vira 400). */
 export class InvalidRequest extends Error {}
@@ -89,9 +112,20 @@ interface Waiter {
   timer: ReturnType<typeof setTimeout>;
 }
 
+/** Formato ORIGINAL de uma pergunta do AskUserQuestion: para conferir as respostas, que voltam por posição. */
+interface AskFormat {
+  multiSelect: boolean;
+  /** Quantas opções o original tem (inclusive as que o Habblaud não mostra). */
+  options: number;
+}
+
 interface Pending {
   /** Versão completa (com `input`): GET /api/permissions/:id. */
   info: PermissionRequestInfo;
+  /** Pedido do Codex ou do OpenCode (sem a busca da resposta no transcript). */
+  codex?: boolean;
+  /** Pergunta (AskUserQuestion): o formato de `tool_input.questions`, por posição (undefined = entrada inválida). */
+  askFormat?: Array<AskFormat | undefined>;
   agentId: string;
   sessionId: string;
   /** agent_id do hook (pedido de subagente). */
@@ -118,6 +152,54 @@ function rec(v: unknown): Rec | undefined {
 
 function shortStr(v: unknown, max: number): string | undefined {
   return typeof v === 'string' && v.trim() && v.length <= max ? v.trim() : undefined;
+}
+
+function isIndex(v: unknown): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 0;
+}
+
+/** Pedido que se responde com `answer` (as perguntas do AskUserQuestion; o Codex não as manda pelo hook; o plugin do OpenCode manda as dele assim). */
+function isQuestion(info: { tool: string; provider?: string }): boolean {
+  return info.tool === ASK_TOOL && info.provider !== 'codex';
+}
+
+/** O Codex e o OpenCode não aceitam interromper nem "sempre permitir" (só aprovar ou recusar com motivo). */
+function unsupportedByCodex(info: PermissionRequestInfo, d: PermissionDecision): boolean {
+  return (info.provider === 'codex' || info.provider === 'opencode') && (d.interrupt === true || d.suggestion !== undefined);
+}
+
+/**
+ * A decisão não serve para o tipo de pedido: `answer` só vale para perguntas, e pergunta não se aprova sem as
+ * respostas (recusar e "responder no terminal" valem para os dois).
+ */
+function wrongKind(info: PermissionRequestInfo, d: PermissionDecision): boolean {
+  return d.behavior === 'answer' ? !isQuestion(info) || !info.questions?.length : d.behavior === 'allow' && isQuestion(info);
+}
+
+/** Formato original das perguntas do AskUserQuestion, por posição. */
+function askFormat(raw: unknown): Array<AskFormat | undefined> {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((q) => {
+    const r = rec(q);
+    return r ? { multiSelect: r.multiSelect === true, options: Array.isArray(r.options) ? r.options.length : 0 } : undefined;
+  });
+}
+
+/** Perguntas de verdade (com texto) no original: todas precisam aparecer no escritório para dar para responder por lá. */
+function askCount(raw: unknown): number {
+  if (!Array.isArray(raw)) return 0;
+  return raw.filter((q) => {
+    const text = rec(q)?.question;
+    return typeof text === 'string' && !!text.trim();
+  }).length;
+}
+
+/** A resposta cabe no formato original da pergunta (posições das opções e quantas escolhas). */
+function fitsFormat(f: AskFormat | undefined, a: PermissionAnswer): boolean {
+  if (!f) return false;
+  const options = a.options ?? [];
+  if (options.some((i) => i >= f.options)) return false;
+  return f.multiSelect || options.length + (a.other ? 1 : 0) === 1;
 }
 
 /** Agente que ainda pode receber um pedido (não saiu nem concluiu). */
@@ -164,12 +246,19 @@ export function applyPermission(a: AgentInfo, p: PermissionRequestInfo | undefin
     a.status = 'waiting';
     a.statusSince = p.createdAt;
   }
-  a.waitingFor ??= 'aprovar uma permissão';
+  a.waitingFor ??= isQuestion(p) ? 'responder uma pergunta' : p.provider === 'codex' ? 'aprovar um comando' : 'aprovar uma permissão';
   return a;
 }
 
-/** Valida o JSON do hook (o mesmo que o Claude Code entrega no stdin, com `timeout_ms` do hook). */
+/**
+ * Valida o JSON do hook (o mesmo que o Claude Code entrega no stdin, com `timeout_ms` do hook). O hook do Codex manda
+ * também `provider: "codex"`, a conta (`account`, o basename do CODEX_HOME) e o caminho dela (`codexHome`); nele,
+ * `agent_id` é o thread do subagente (e `session_id`, o thread raiz).
+ */
 export function parseHookInput(raw: unknown): {
+  provider?: 'codex' | 'opencode';
+  account?: string;
+  codexHome?: string;
   sessionId: string;
   agentId?: string;
   agentType?: string;
@@ -184,21 +273,55 @@ export function parseHookInput(raw: unknown): {
   const tool = shortStr(r?.tool_name, 200);
   if (!r || !sessionId || !tool) throw new InvalidRequest('esperado o JSON do hook PermissionRequest (session_id e tool_name)');
   const t = typeof r.timeout_ms === 'number' && Number.isFinite(r.timeout_ms) ? r.timeout_ms : DEFAULT_TIMEOUT_MS;
+  const codex = r.provider === 'codex';
+  const opencode = r.provider === 'opencode';
   return {
+    ...(codex ? { provider: 'codex' as const, account: shortStr(r.account, 200), codexHome: shortStr(r.codexHome, 4_096) } : opencode ? { provider: 'opencode' as const } : {}),
     sessionId,
     agentId: shortStr(r.agent_id, 200),
     agentType: shortStr(r.agent_type, 120),
     cwd: shortStr(r.cwd, 4_096),
     tool,
     input: rec(r.tool_input) ?? {},
-    suggestions: r.permission_suggestions,
+    suggestions: codex || opencode ? undefined : r.permission_suggestions,
     timeoutMs: Math.min(MAX_TIMEOUT_MS, Math.max(MIN_TIMEOUT_MS, t)),
   };
+}
+
+/**
+ * Respostas de uma decisão `answer`: até MAX_ANSWERS, cada uma com a posição da pergunta, as posições das opções
+ * (distintas; ficam em ordem crescente) e/ou o texto livre (aparado, até ANSWER_OTHER_MAX). Se batem com as
+ * perguntas do pedido, quem confere é o registro (decide).
+ */
+function parseAnswers(raw: unknown): PermissionAnswer[] | undefined {
+  if (!Array.isArray(raw) || !raw.length || raw.length > MAX_ANSWERS) return undefined;
+  const out: PermissionAnswer[] = [];
+  for (const item of raw) {
+    const r = rec(item);
+    if (!r || !isIndex(r.question)) return undefined;
+    const a: PermissionAnswer = { question: r.question };
+    if (r.options !== undefined) {
+      if (!Array.isArray(r.options) || !r.options.every(isIndex) || new Set(r.options).size !== r.options.length) return undefined;
+      if (r.options.length) a.options = (r.options as number[]).slice().sort((x, y) => x - y);
+    }
+    if (r.other !== undefined) {
+      if (typeof r.other !== 'string') return undefined;
+      const other = r.other.trim();
+      if (other.length > ANSWER_OTHER_MAX) return undefined;
+      if (other) a.other = other;
+    }
+    out.push(a);
+  }
+  return out;
 }
 
 /** Corpo de uma decisão vinda da página. */
 export function parseDecision(raw: unknown): PermissionDecision | undefined {
   const r = rec(raw);
+  if (r?.behavior === 'answer') {
+    const answers = parseAnswers(r.answers);
+    return answers ? { behavior: 'answer', answers } : undefined;
+  }
   if (!r || (r.behavior !== 'allow' && r.behavior !== 'deny' && r.behavior !== 'terminal')) return undefined;
   const d: PermissionDecision = { behavior: r.behavior };
   if (r.behavior === 'deny') {
@@ -256,43 +379,65 @@ export class PermissionRegistry {
 
   /**
    * Registra um pedido vindo do hook. `{skip}` = não desviar (o hook sai na hora e o terminal segue):
-   * ninguém olhando, sessão desconhecida, ferramenta que não se aprova/recusa ou pedidos demais.
-   * Corpo inválido: lança InvalidRequest.
+   * pergunta que o escritório não consegue mostrar inteira, ninguém olhando, sessão desconhecida ou pedidos
+   * demais. Corpo inválido: lança InvalidRequest.
    */
   register(raw: unknown): RegisterResult {
     const req = parseHookInput(raw);
-    if (UNSUPPORTED_TOOLS.has(req.tool)) return { skip: 'unsupported-tool' };
+    const codex = req.provider === 'codex';
+    const opencode = req.provider === 'opencode';
+    const desc = codex ? codexToolView(req.tool, req.input, req.cwd) : opencode ? opencodeToolView(req.tool, req.input, req.cwd) : describeTool(req.tool, req.input);
+    const questions = 'questions' in desc ? desc.questions : undefined;
+    const ask = isQuestion(req);
+    // Pergunta: todas precisam aparecer no escritório (o hook só responde se cada uma tiver resposta).
+    if (ask && (!questions?.length || questions.length !== askCount(req.input.questions))) return { skip: 'unsupported-tool' };
     if (this.opts.viewers() <= 0) return { skip: 'no-viewers' };
-    const target = this.resolveAgent(req.sessionId, req.agentId, req.agentType);
+    const target = codex
+      ? this.resolveCodexAgent(req.sessionId, req.agentId, req.agentType, this.opts.codexAccount?.(req.account, req.codexHome) ?? req.account)
+      : opencode
+        ? this.resolveOpencodeAgent(req.sessionId)
+        : this.resolveAgent(req.sessionId, req.agentId, req.agentType);
     if (!target) return { skip: 'unknown-session' };
     if (this.size >= this.maxPending) return { skip: 'too-many' };
 
     const now = this.now();
     const id = `p-${now.toString(36)}-${++this.seq}-${randomBytes(9).toString('base64url')}`;
-    const view = toolView(req.tool, req.input, req.cwd);
-    const desc = describeTool(req.tool, req.input);
+    // Codex: título, resumo e argumentos pelos nomes de ferramenta dele (permissions/codex.ts).
+    const view = 'title' in desc ? desc : toolView(req.tool, req.input, req.cwd);
     const info: PermissionRequestInfo = { id, tool: req.tool, title: view.title, text: desc.text, icon: desc.icon, createdAt: now, expiresAt: now + req.timeoutMs };
+    if (codex) info.provider = 'codex';
+    else if (opencode) info.provider = 'opencode';
     if (view.input) info.input = view.input;
     if (view.inputKind) info.inputKind = view.inputKind;
     if (target.subagent) info.subagent = target.subagent;
     const suggestions = pickSuggestions(req.suggestions);
     if (suggestions.length) info.suggestions = suggestions;
+    if (ask) info.questions = questions;
 
     const p: Pending = {
       info,
       agentId: target.id,
       sessionId: req.sessionId,
-      signature: callSignature(req.tool, req.input),
+      signature: codex || opencode ? '' : callSignature(req.tool, req.input),
       lastScanAt: 0,
       waiters: new Set(),
       idleSince: now,
     };
+    if (codex || opencode) p.codex = true; // sem a busca da resposta no transcript (o OpenCode não grava um)
     if (req.agentId) p.hookAgentId = req.agentId;
+    if (ask) p.askFormat = askFormat(req.input.questions);
     this.pending.set(id, p);
 
     const by = target.subagent ? ` (subagente ${target.subagent})` : '';
-    this.opts.office.addActivity(target.id, { id: `${target.id}#perm:${id}`, at: now, kind: 'wait', icon: '🔐', text: truncate(`Pede permissão: ${desc.text}`, 46), detail: view.title, tool: 'PermissionRequest' }, false);
-    this.opts.office.noticePermission(target.id, `${desc.text}${by}`);
+    const first = info.questions?.[0]?.question;
+    if (first) {
+      const all = info.questions!.map((q) => q.question).join(' · ');
+      this.opts.office.addActivity(target.id, { id: `${target.id}#perm:${id}`, at: now, kind: 'wait', icon: '❓', text: truncate(`Pergunta: ${first}`, 46), detail: truncate(all, 300), tool: 'PermissionRequest' }, false);
+      this.opts.office.noticePermission(target.id, `${truncate(first, 120)}${by}`, 'question');
+    } else {
+      this.opts.office.addActivity(target.id, { id: `${target.id}#perm:${id}`, at: now, kind: 'wait', icon: '🔐', text: truncate(`Pede permissão: ${desc.text}`, 46), detail: view.title, tool: 'PermissionRequest' }, false);
+      this.opts.office.noticePermission(target.id, `${desc.text}${by}`);
+    }
     this.opts.office.markDirty();
     return { id, expiresAt: info.expiresAt + EXPIRY_GRACE_MS };
   }
@@ -348,16 +493,24 @@ export class PermissionRegistry {
     return { result, cancel: () => waiter && this.dropWaiter(p, waiter) };
   }
 
-  /** Decisão da página. Pedido do demo vai para `demoDecide`. */
+  /** Decisão da página. Pedido do demo vai para `demoDecide` (com as mesmas regras para as perguntas). */
   decide(id: string, d: PermissionDecision): DecideResult {
     const p = this.pending.get(id);
-    if (!p) return this.opts.demoDecide?.(id, d) ? 'ok' : 'not-found';
+    if (!p) {
+      const demo = this.opts.demoDetail?.(id);
+      if (demo && unsupportedByCodex(demo, d)) return 'unsupported';
+      if (demo && (wrongKind(demo, d) || (d.behavior === 'answer' && !checkAnswers(demo.questions ?? [], d.answers)))) return 'invalid-answer';
+      return this.opts.demoDecide?.(id, d) ? 'ok' : 'not-found';
+    }
     if (p.outcome) return 'conflict';
+    if (unsupportedByCodex(p.info, d)) return 'unsupported';
     if (d.suggestion !== undefined && !p.info.suggestions?.some((s) => s.index === d.suggestion)) return 'invalid';
     if (d.behavior === 'terminal') {
       this.release(p, 'terminal');
       return 'ok';
     }
+    if (wrongKind(p.info, d)) return 'invalid-answer';
+    if (d.behavior === 'answer') return this.answer(p, d.answers);
     const outcome: WaitResult = { status: 'decided', behavior: d.behavior };
     if (d.message) outcome.message = d.message;
     if (d.interrupt) outcome.interrupt = true;
@@ -372,6 +525,34 @@ export class PermissionRegistry {
     return 'ok';
   }
 
+  /**
+   * Respostas às perguntas de um AskUserQuestion: cada pergunta mostrada respondida exatamente uma vez, com as
+   * opções dela, conferidas também contra o formato ORIGINAL (é por posição que o hook acha os textos).
+   */
+  private answer(p: Pending, raw: PermissionAnswer[] | undefined): DecideResult {
+    const questions = p.info.questions ?? [];
+    const answers = checkAnswers(questions, raw);
+    if (!answers || answers.some((a) => !fitsFormat(p.askFormat?.[a.question], a))) return 'invalid-answer';
+    this.resolve(p, { status: 'decided', behavior: 'answer', answers });
+    const act: Activity = { id: `${p.agentId}#perm-answer:${p.info.id}`, at: this.now(), kind: 'other', icon: '💬', text: 'Respondido no Habblaud', detail: answerSummary(questions, answers), tool: 'PermissionRequest' };
+    this.opts.office.addActivity(p.agentId, act, false);
+    return 'ok';
+  }
+
+  /**
+   * O OpenCode recebeu a resposta (no terminal ou pelo escritório): libera as perguntas dele ainda abertas daquela
+   * sessão, e só elas, para o cartão sumir. Devolve quantas liberou.
+   */
+  releaseOpencodeQuestions(sessionId: string): number {
+    let n = 0;
+    for (const p of [...this.pending.values()]) {
+      if (p.outcome || p.sessionId !== sessionId || p.info.provider !== 'opencode' || !isQuestion(p.info)) continue;
+      this.release(p, 'answered');
+      n++;
+    }
+    return n;
+  }
+
   /** Relógio: expiração, órfãos, agente que saiu, resposta no terminal e limpeza das decisões entregues. */
   tick(): void {
     const now = this.now();
@@ -383,6 +564,8 @@ export class PermissionRegistry {
       if (now >= p.info.expiresAt + EXPIRY_GRACE_MS) this.release(p, 'expired');
       else if (!p.waiters.size && now - p.idleSince >= this.orphanMs) this.release(p, 'orphan');
       else if (!present(this.opts.office.get(p.agentId))) this.release(p, 'gone');
+      // No Codex o terminal só pede a aprovação depois que o hook termina: não há resposta dada lá para procurar.
+      else if (p.codex) continue;
       else if (now - p.lastScanAt >= SCAN_EVERY_MS && this.answeredInTerminal(p, now)) this.release(p, 'answered');
       else if (this.leftWaiting(p, now)) this.release(p, 'answered');
     }
@@ -394,11 +577,39 @@ export class PermissionRegistry {
     const office = this.opts.office;
     if (agentId) {
       const subId = `${sessionId}:${agentId}`;
-      if (present(office.get(subId))) return { id: subId };
+      const sub = office.get(subId);
+      if (present(sub) && sub.provider !== 'codex' && sub.provider !== 'opencode') return { id: subId };
     }
-    const main = office.list().find((a) => a.kind === 'main' && a.sessionId === sessionId && a.status !== 'offline');
+    const main = office.list().find((a) => a.kind === 'main' && a.provider !== 'codex' && a.provider !== 'opencode' && a.sessionId === sessionId && a.status !== 'offline');
     if (!main) return undefined;
     return agentId ? { id: main.id, subagent: agentType ?? 'subagente' } : { id: main.id };
+  }
+
+  /**
+   * Agente do Codex de um pedido: o do thread `agent_id ?? session_id` (o subagente tem thread próprio; o principal é o
+   * thread raiz). A conta só desempata (ids de thread são UUIDs). Subagente que o Habblaud não mostra: o pedido vai
+   * para o principal, com o tipo dele.
+   */
+  private resolveCodexAgent(sessionId: string, agentId: string | undefined, agentType: string | undefined, account: string | undefined): { id: string; subagent?: string } | undefined {
+    const find = (thread: string): AgentInfo | undefined => {
+      const found = this.opts.office.list().filter((a) => a.provider === 'codex' && a.sessionId === thread && present(a));
+      return found.find((a) => a.account === account) ?? found[0];
+    };
+    const sub = agentId && agentId !== sessionId ? agentId : undefined;
+    const own = sub ? find(sub) : undefined;
+    if (own) return { id: own.id };
+    const main = find(sessionId);
+    if (!main) return undefined;
+    return sub ? { id: main.id, subagent: agentType ?? 'subagente' } : { id: main.id };
+  }
+
+  /**
+   * Agente do OpenCode de um pedido: o da sessão `session_id` (a sessão filha de um subagente tem id próprio e, quando o
+   * Habblaud a mostra, é o agente dela que recebe o pedido). Sessão que o Habblaud não mostra: sem desvio.
+   */
+  private resolveOpencodeAgent(sessionId: string): { id: string; subagent?: string } | undefined {
+    const found = this.opts.office.list().find((a) => a.provider === 'opencode' && a.sessionId === sessionId && present(a));
+    return found ? { id: found.id } : undefined;
   }
 
   private queueOf(p: Pending): { queued?: number } {
