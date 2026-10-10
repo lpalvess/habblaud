@@ -974,6 +974,30 @@ diz em que pasta ela está (só cria a trava da sessão), e sem a pasta não há
 </details>
 
 <details>
+<summary><b>O OpenCode não aparece no escritório (ou aparece sem botões)</b></summary>
+
+Confira, nesta ordem:
+
+- **Node:** a leitura do banco do OpenCode pede o Node **22.13 ou mais novo**. No 22.12 o log de inicialização diz isso
+  e só o plugin funciona.
+- **Pasta de dados:** o Habblaud procura o OpenCode em `~/.local/share/opencode`. Se a sua fica em outro lugar, aponte
+  com `HABBLAUD_OPENCODE_DIR`. `HABBLAUD_OPENCODE=0` desliga o OpenCode no escritório; veja se não ficou ligado por
+  engano.
+- **Plugin antigo:** o plugin é uma **cópia** feita na hora da instalação. Depois de atualizar o Habblaud, rode
+  `npm run opencode:install` de novo e **reinicie o OpenCode**. Uma cópia antiga mostra as perguntas só pela leitura do
+  banco, sem os botões de responder.
+- **Porta:** `npm run opencode:status` mostra a porta gravada em `~/.habblaud/opencode-hook.json`. Ela precisa ser a
+  porta do Habblaud que você está usando; com outra porta, o plugin fala com ninguém. Reinstale com
+  `npm run opencode:install -- --port <porta>`.
+- **Página aberta:** o cartão de aprovação ou de pergunta só aparece com a página do escritório aberta no navegador.
+  Sem ela, o OpenCode segue com o prompt dele.
+- **Para investigar:** abra o OpenCode com `HABBLAUD_HOOK_DEBUG=1 opencode 2>~/oc-habblaud.log` e procure as linhas que
+  começam com `[habblaud-opencode]`. Quando um cartão não aparece, o motivo está lá: `no-viewers` (nenhuma página
+  aberta), `unknown-session`, `unsupported-tool` ou `too-many`.
+
+</details>
+
+<details>
 <summary><b>A caixa de mensagem não aparece (ou fica na fila)</b></summary>
 
 A caixa só aparece para agentes principais cuja sessão tem o plugin `habblaud-mensagens` conectado: rode
