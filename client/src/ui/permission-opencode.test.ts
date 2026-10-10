@@ -32,8 +32,10 @@ describe('cartão de permissão do OpenCode', () => {
     expect(permissionOptions({ provider: 'codex', tool: 'AskUserQuestion' }, { kind: 'main' }).reasonRequired).toBe(true);
   });
 
-  it('o OpenCode nunca vira cartão de pergunta, nem com a ferramenta de pergunta', () => {
-    expect(isQuestionRequest({ tool: 'AskUserQuestion', questions: [question], provider: 'opencode' })).toBe(false);
+  it('a pergunta do OpenCode vira cartão de pergunta (como a do Claude Code); sem perguntas ou outra ferramenta, não', () => {
+    expect(isQuestionRequest({ tool: 'AskUserQuestion', questions: [question], provider: 'opencode' })).toBe(true);
+    expect(isQuestionRequest({ tool: 'AskUserQuestion', questions: [], provider: 'opencode' })).toBe(false);
+    expect(isQuestionRequest({ tool: 'bash', questions: [question], provider: 'opencode' })).toBe(false);
     expect(isQuestionRequest({ tool: 'AskUserQuestion', questions: [question] })).toBe(true);
   });
 

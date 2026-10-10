@@ -7,8 +7,9 @@
 // depois que você responder aqui ou o prazo acabar; não há "sempre permitir" nem "interromper", e recusar pede um
 // motivo. O Codex nunca pergunta pelo escritório (sem cartão de pergunta).
 // Pedido do OpenCode (`provider: 'opencode'`): como o do Codex (só aprovar ou recusar, recusar pede um motivo, o prazo é
-// de segundos, sem pergunta); a diferença é que o pedido do próprio OpenCode já está na tela dele enquanto o cartão
-// espera: responder aqui o resolve lá, e sem resposta vale o prompt do OpenCode.
+// de segundos); a diferença é que o pedido do próprio OpenCode já está na tela dele enquanto o cartão espera:
+// responder aqui o resolve lá, e sem resposta vale o prompt do OpenCode. A PERGUNTA do OpenCode (AskUserQuestion) tem o
+// mesmo formulário do Claude Code (Responder; "Não responder" sem motivo obrigatório).
 import { ANSWER_OTHER_MAX, ASK_TOOL, checkAnswers } from '../../../shared/answers';
 import type { AgentInfo, AskQuestion, PermissionAnswer, PermissionDecision, PermissionRequestInfo, PermissionSuggestionInfo } from '../../../shared/types';
 import type { UiContext } from './context';
@@ -105,9 +106,9 @@ export function isLocalHostname(hostname: string): boolean {
   return name === 'localhost' || name.endsWith('.localhost') || name === '::1' || /^127(?:\.\d{1,3}){3}$/.test(name);
 }
 
-/** Pedido que se responde escolhendo (as perguntas do AskUserQuestion), não aprovando. O Codex nunca pergunta. */
+/** Pedido que se responde escolhendo (as perguntas do AskUserQuestion), não aprovando. O Codex nunca pergunta; o OpenCode pergunta como o Claude Code. */
 export function isQuestionRequest(p: Pick<PermissionRequestInfo, 'tool' | 'questions' | 'provider'> | undefined): boolean {
-  return !!p && p.provider !== 'codex' && p.provider !== 'opencode' && p.tool === ASK_TOOL && !!p.questions?.length;
+  return !!p && p.provider !== 'codex' && p.tool === ASK_TOOL && !!p.questions?.length;
 }
 
 /** O que está marcado numa pergunta do cartão: as opções (posições do original) e o "Outro" (marcado, e o texto). */
