@@ -12,6 +12,144 @@ do meio (0.**3**.0).
 
 ### Adicionado
 
+- **OpenCode no escritório.** As sessões do OpenCode entram como as do Claude Code e do Codex: cada projeto é uma sala,
+  cada sessão um personagem com o selo **OpenCode**, com atividade, subagentes e status. Sem instalar nada, o Habblaud
+  lê o banco do OpenCode (`opencode.db`) só para leitura, e apenas as tabelas `project`, `session`, `message`, `part` e
+  `todo`; isso pede o Node 22.13 ou mais novo (no Node 22.12 a leitura fica desligada e o resto segue).
+  `HABBLAUD_OPENCODE=0` desliga e `HABBLAUD_OPENCODE_DIR` escolhe a pasta de dados. Implementado e coberto por testes
+  automáticos, e conferido de ponta a ponta no OpenCode 1.18.35, no Linux, com uma pasta pessoal temporária e isolada
+  (sessão, eventos ao vivo, entrega de mensagem e um pedido de permissão real aprovado e recusado); "sempre permitir" e
+  interromper não são oferecidos, de propósito.
+- **Plugin do OpenCode** (`npm run opencode:install`, `opencode:status` e `opencode:uninstall`): copia um plugin para
+  `~/.config/opencode/plugins/habblaud.js` (backup antes; `--dry-run` só mostra o plano). Com ele, o status chega ao
+  vivo, os pedidos de permissão do OpenCode podem ser aprovados ou recusados no cartão **Pede permissão** (sem "sempre
+  permitir") e a caixa **Mandar mensagem** entrega texto ao agente principal da sessão.
+- **Perguntas do OpenCode no escritório.** Quando o OpenCode faz uma pergunta (a ferramenta `question`), o agente fica
+  esperando e o cartão **Precisa de você** mostra o texto e as opções, com o plugin (na hora) ou sem ele (na próxima
+  leitura do banco; só a pergunta e as opções da ferramenta `question` são lidas). Com o plugin, dá para responder
+  (uma opção, várias ou texto livre) ou recusar pelo escritório, esperando até 10 minutos; sem resposta aqui, vale o
+  prompt do OpenCode, e responder lá também faz o cartão sumir. Reinicie o OpenCode depois de atualizar o plugin
+  (`npm run opencode:install`). Coberto por testes automáticos.
+- **Ajuda do app com uma seção do OpenCode**, ao lado da do Codex: o que aparece, o plugin opcional
+  (`npm run opencode:install` e reiniciar o OpenCode), aprovar, perguntas, mensagens e quais tabelas são lidas.
+- **Solução de problemas do OpenCode no README:** Node 22.13, pasta de dados, plugin que ficou para trás, porta do
+  `opencode:status`, página aberta e como depurar com `HABBLAUD_HOOK_DEBUG=1`.
+- **Docker e OpenCode:** a leitura do banco do OpenCode não funciona no Docker (o `docker:up` não monta nenhum SQLite);
+  para ver o OpenCode, rode o Habblaud sem Docker.
+
+## [0.8.0] - 2026-10-09
+
+Para atualizar: `git pull` e `npm run docker:up`. Renomear salas e editar o personagem funcionam só pelo próprio
+computador (a mesma trava do terminal). Os nomes das salas ficam em `rooms.json` e os personagens em `names.json`, na
+pasta de dados do Habblaud; voltar para a 0.7 faz os personagens escolhidos sumirem na primeira gravação.
+
+### Adicionado
+
+- A lista lateral e a dica do personagem mostram o título da sessão (nos subagentes, a tarefa) embaixo do nome. Na
+  lista, o agente principal parado há 1 minuto ou mais mostra **ocioso 12 min** no lugar de "Principal"; na dica, o
+  estado vem com há quanto tempo ele está assim (**há 12 min**).
+- **Janelas móveis:** o terminal e a gaveta do agente se soltam do lugar arrastando pela barra, mudam de tamanho por
+  qualquer borda ou quina e voltam ao lugar com um duplo clique na barra. O terminal ganha o botão **Expandir na tela
+  toda**. Posição e tamanho ficam guardados no navegador; em tela estreita tudo continua fixo. Solta, a gaveta deixa de
+  reservar a lateral do escritório.
+- **Reordenar a lista lateral:** arrastar a linha de um agente principal muda a ordem dos agentes da sala, e arrastar
+  o cabeçalho de uma sala muda a ordem das salas (no prédio elas ficam onde estão). A ordem fica guardada no
+  navegador; a dos agentes vai pela sessão do Claude Code e sobrevive a retomar a sessão.
+- **Renomear sala:** botão direito numa sala (na lista lateral ou no escritório) abre um campo para dar outro nome a
+  ela; vazio volta ao nome da pasta. O nome fica no servidor (`rooms.json`, na pasta de dados do Habblaud), por pasta:
+  vale em qualquer navegador e sobrevive a reinícios. Na gaveta da sala, um lápis ao lado do nome abre o mesmo campo.
+  Só pelo próprio computador; as salas de demonstração não mudam.
+- **Editar o personagem de um projeto.** Nos detalhes do agente principal, o lápis ao lado do nome abre um editor
+  com o nome, **Sortear** e as peças (pele, cabelo, barba, olhos, roupa, sapatos e acessório), com prévia. A escolha
+  vale para o projeto: a próxima sessão na mesma sala chega com o mesmo personagem, e **Voltar ao sorteio** desfaz.
+  Só funciona pelo próprio computador, como o terminal.
+
+### Alterado
+
+- A linha do tempo do agente mostra os 15 itens mais recentes, com **Mostrar mais** (mais 15 a cada clique, até
+  os 200 guardados) e **Mostrar menos** (volta aos 15). Antes eram 80 de uma vez.
+
+### Corrigido
+
+- No Windows, as mensagens ao Codex procuravam `codex` no PATH e achavam o script que o npm instala ao lado do
+  executável: o Habblaud dizia que as mensagens estavam ligadas, mas cada entrega falhava, porque o script não roda
+  sem shell. Agora a busca é pelo `codex.exe`. Com o Codex instalado só pelo npm, aponte `HABBLAUD_CODEX_BIN` para um
+  `codex.exe`.
+- No Windows, o comando de statusline que já existia antes do `npm run usage:install` (o Habblaud o guarda e
+  continua rodando) era executado pelo `cmd.exe`, e o que funcionava no Claude Code (aspas simples, variáveis, pipes)
+  quebrava. Agora ele roda no Git Bash, como no Claude Code: o de `CLAUDE_CODE_GIT_BASH_PATH` ou o da instalação do
+  Git. Sem o Git Bash, continua no `cmd.exe`.
+- No Windows, os instaladores (`usage:install`, `hooks:install`, `codex:install` e `mod:install`) mostravam os
+  caminhos da pasta do usuário por inteiro (`C:\Users\...`) em vez de `~/...`.
+- A suíte de testes (`npm test`) passa no Windows: os testes que supunham caminhos, shell ou permissões do Linux e do
+  macOS agora valem nos três sistemas, e os poucos que dependem de algo que o Windows não tem são pulados nele.
+
+## [0.7.0] - 2026-10-09
+
+Para atualizar: `git pull` e `npm run docker:up` (o Codex aparece sozinho, se houver uma pasta `~/.codex`). Para ver o
+Codex ao vivo e aprovar pelo escritório: `npm run codex:install` e aprove os hooks do Habblaud em `/hooks` no Codex
+(reinicie o Codex antes, se ele estava aberto). Com o Habblaud no Docker, para mandar mensagens ao Codex deixe
+`npm run codex:bridge` rodando no Mac.
+
+### Adicionado
+
+- **Codex no escritório.** As sessões do Codex da OpenAI (a CLI `codex` e o app) entram no escritório como as do
+  Claude Code: cada projeto é uma sala (a mesma do Claude Code, quando os dois estão no mesmo projeto), cada sessão um
+  personagem com o selo **CODEX**, com atividade, subagentes, terminal, histórico, uso de 5 horas e semanal (com a
+  idade dos números e "sem cota" quando acabam os créditos) e o Meu dia (só tokens: o Codex não informa custo). Sem
+  instalar nada, o Habblaud lê os arquivos do Codex (`~/.codex`, `CODEX_HOME` ou `~/.codex*`; `HABBLAUD_CODEX_DIRS`
+  escolhe as pastas e `HABBLAUD_CODEX=0` desliga). Uma sessão entra com a primeira mensagem, que é quando o Codex diz
+  a pasta do projeto (uma CLI aberta e ainda sem conversa não aparece). No Docker, só `sessions/`,
+  `archived_sessions/` e `thread-writer-locks/` são montadas, somente leitura.
+- **Codex ao vivo e aprovar pelo escritório:** `npm run codex:install` acrescenta os hooks do Habblaud no
+  `~/.codex/hooks.json` (com backup; os hooks de outros apps ficam no mesmo lugar) e, depois de aprová-los em `/hooks`
+  no Codex, a atividade é a de agora (e não só quando cada passo termina) e os pedidos de aprovação esperam a sua resposta no
+  escritório por até 25 s (`-- --espera <s>`) antes de irem ao terminal. `codex:status` confere e `codex:uninstall`
+  tira.
+- **Mensagens ao Codex** pela mesma caixa **Mandar mensagem**, via `codex queue` (entram quando a sessão termina o que
+  está fazendo). No Docker, deixe `npm run codex:bridge` rodando no Mac.
+
+### Alterado
+
+- Uma pasta do Codex nunca vira conta do Claude Code, nem listada em `HABBLAUD_CLAUDE_DIRS` ou `CLAUDE_CONFIG_DIR`; o
+  servidor e o `docker:up` avisam.
+- Com quatro contas ou mais, os cartões de uso do topo ficam mais estreitos e os botões de zoom somem até 1700 px de
+  largura, para não invadir os botões da direita.
+
+## [0.6.0] - 2026-10-09
+
+Para atualizar: `git pull`, `npm run docker:up` e `npm run mod:install` (traz o plugin de permissões novo e o de
+mensagens); nas sessões já abertas, `/reload-plugins`.
+
+### Adicionado
+
+- **Responder as perguntas do agente pelo escritório.** Quando o agente faz uma pergunta (`AskUserQuestion`), o cartão
+  de perguntas mostra cada uma com as opções e as descrições: escolha uma (ou várias, quando a pergunta deixa),
+  escreva a sua em "Outro" ou recuse. Como nas permissões, o diálogo continua no terminal e vale o que você responder
+  primeiro; a tecla `P` e o contador "precisam de você" também levam às perguntas. Precisa do plugin
+  `habblaud-permissoes` desta versão.
+- **Mandar mensagens aos agentes pelo escritório.** Os detalhes de cada agente principal ganham a seção "Mandar
+  mensagem": o texto entra na sessão como se você tivesse digitado no terminal dela (com o agente ocupado, entra
+  quando ele terminar o turno), e a caixa mostra se a mensagem está na fila, foi entregue ou não. Vem de um plugin
+  novo, `habblaud-mensagens` (Claude Code 2.1.287+), instalado pelo `npm run mod:install` (`-- --sem-mensagens` deixa
+  de fora); o `npm run docker:up` não o instala sozinho, só avisa. Segue a trava do terminal (só acesso local) e
+  `HABBLAUD_MENSAGENS=0` desliga. Leia o aviso em "Privacidade e segurança" no README: qualquer programa desta máquina
+  consegue mandar mensagem às sessões que têm o plugin.
+
+### Alterado
+
+- **O terminal (tecla `T`) aceita digitação.** Deixou de ser "somente leitura": nos agentes principais, o rodapé
+  virou a caixa de mensagem (`Enter` manda, `Shift+Enter` quebra a linha). Subagentes e sessões do histórico continuam
+  só para ler.
+- `npm run mod:install`, `mod:status` e `mod:uninstall` cuidam também do plugin `habblaud-mensagens`, e o
+  `mod:status` diz se o Habblaud está com as mensagens ligadas.
+
+## [0.5.0] - 2026-10-09
+
+### Adicionado
+
+- O cartão "Precisa de você" mostra as perguntas do `AskUserQuestion` completas, com as opções e as descrições
+  (até 4 perguntas, com 6 opções cada). É só para ler: a resposta continua sendo dada no Claude Code.
 - Verificação automática no GitHub (Actions): a cada push na `main` e a cada pull request, o projeto roda
   `typecheck`, testes e build no Node 22.12, a versão mínima que o `package.json` declara.
 
@@ -19,8 +157,19 @@ do meio (0.**3**.0).
 
 - Quando um arquivo de transcript era apagado e outro, maior, era criado no lugar, o Habblaud podia não perceber a
   troca: alguns sistemas de arquivos reaproveitam o número (inode) do arquivo apagado, e só o inode era comparado.
-  Agora, quando o sistema informa o momento de criação do arquivo, ele também entra na comparação, e a leitura
+  Agora também contam o momento de criação do arquivo (quando o sistema o informa) e o começo dele, e a leitura
   recomeça do início do arquivo novo.
+- No Windows, com o Node 23 até o 24.19, o hook do plugin `habblaud-permissoes` caía ao sair (código 0xC0000409,
+  um bug do Node: nodejs/node#56645) logo depois de receber a resposta do escritório. A decisão chegava antes da
+  queda, mas sem decisão (como em "Responder no terminal") a sessão podia registrar um erro do hook. Agora o hook
+  sai sem cair.
+- O `npm install` alterava o `package-lock.json` (o do repositório estava desatualizado em relação ao
+  `package.json`), e por isso o `git pull` da versão seguinte parava com "Your local changes … would be
+  overwritten". Agora o arquivo fica igual. Quem já tem a alteração roda uma vez `git checkout -- package-lock.json`
+  antes do `git pull`.
+- No Windows, o mod não gravava o uso de 5 horas e semanal quando o `HOME` não estava definido (o normal fora do Git
+  Bash): agora usa o `USERPROFILE`. E um `CLAUDE_CONFIG_DIR` com `\` (ex.: `C:\Users\voce\.claude-conta2`) virava um
+  nome de arquivo inválido; agora dá a mesma conta, inclusive com o Habblaud no Docker.
 
 ## [0.4.0] - 2026-10-08
 
@@ -105,7 +254,8 @@ Primeira versão publicada.
   Subagentes chegam, trabalham e entregam ao principal. Mostra as duas contas, com o uso de 5 horas e semanal de
   cada uma (tap de statusline), além de feed de atividade, avisos e modo demonstração. Roda no Node ou no Docker local.
 
-[Não lançado]: https://github.com/marmottajr/habblaud/compare/v0.4.0...HEAD
+[Não lançado]: https://github.com/marmottajr/habblaud/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/marmottajr/habblaud/releases/tag/v0.5.0
 [0.4.0]: https://github.com/marmottajr/habblaud/releases/tag/v0.4.0
 [0.3.2]: https://github.com/marmottajr/habblaud/releases/tag/v0.3.2
 [0.3.1]: https://github.com/marmottajr/habblaud/releases/tag/v0.3.1

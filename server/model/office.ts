@@ -14,6 +14,7 @@ import type {
   OfficeSnapshot,
   PermissionDecision,
   PermissionRequestInfo,
+  Provider,
   RoomInfo,
   ShellJob,
   SourceInfo,
@@ -21,11 +22,12 @@ import type {
   UpdateStatus,
 } from '../../shared/types';
 import { SHELL_WAIT_TOOL, SPECIAL, type ShellOutcome } from '../../shared/activity';
+import { nameKey, type AppearanceParts } from '../../shared/appearance';
 import { DemoSimulator } from '../../shared/demo/simulator';
 import { describeGitHubEvent, githubEventKey, RoomEffects, type GitHubEvent } from '../../shared/github';
 import { hash32 } from '../../shared/hash';
 import { applyPermission } from '../permissions/registry';
-import type { NameStore } from './names';
+import type { NameStore, StoredCharacter } from './names';
 import { normalizeCwd, roomDisplayNames, SlotAllocator } from './rooms';
 
 export const OFFLINE_GRACE_MS = 20_000;
@@ -48,6 +50,8 @@ const FEED_LIMIT = 200;
 
 export interface OfficeDeps {
   names: NameStore;
+  /** Nome escolhido pelo usuário para a sala da pasta (model/room-aliases.ts), se houver. */
+  roomAlias?: (path: string) => string | undefined;
   version: string;
   /** Build do cliente servido (ver OfficeSnapshot.meta.build); ausente no modo dev e nos testes. */
   build?: () => string | undefined;
@@ -57,10 +61,15 @@ export interface OfficeDeps {
   sources: () => SourceInfo[];
   /** Nome amigável da conta (ex.: "Conta D") para os avisos. */
   accountName: (id: string) => string | undefined;
-  /** Terminal somente leitura ligado (ver OfficeSnapshot.meta.terminal e ServerConfig.terminal). */
+  /** Terminal ligado (ver OfficeSnapshot.meta.terminal e ServerConfig.terminal). */
   terminal?: boolean;
   /** Pedidos de permissão pendentes por agente (PermissionRegistry.snapshot), postos no snapshot. */
   permissions?: () => ReadonlyMap<string, PermissionRequestInfo>;
+  /**
+   * Agentes cuja sessão o registro de mensagens vê conectada (MessageRegistry.reachable): viram AgentInfo.canMessage.
+   * Ausente = mensagens pelo escritório desligadas (OfficeSnapshot.meta.messages).
+   */
+  messages?: () => ReadonlySet<string>;
   /** Verificação de versão nova no GitHub (ver OfficeSnapshot.meta.updates). */
   updates?: () => UpdateStatus;
   now?: () => number;
@@ -81,6 +90,8 @@ export interface TranscriptSummary {
 
 export interface MainInput {
   id: string;
+  /** Ferramenta do agente (AgentInfo.provider); ausente = 'claude'. Os subagentes herdam a do principal. */
+  provider?: Provider;
   account: string;
   sessionId: string;
   cwd: string;
@@ -123,6 +134,15 @@ export interface ShellDoneInput {
   command?: string;
 }
 
+/** Personagem escolhido no editor (já validado: ver shared/appearance.ts). */
+export interface CharacterInput {
+  name: string;
+  seed: number;
+  parts: AppearanceParts;
+}
+
+export type CharacterResult = { result: 'ok' } | { result: 'not-found' } | { result: 'conflict'; message: string };
+
 export interface CommitResult {
   snapshot: OfficeSnapshot;
   changed: boolean;
@@ -130,7 +150,7 @@ export interface CommitResult {
   notices: Notice[];
 }
 
-type NoticeKind = 'arrive' | 'room' | 'wait' | 'deliver' | 'done' | 'leave' | 'shell' | 'shellDone' | 'github';
+type NoticeKind = 'arrive' | 'room' | 'wait' | 'deliver' | 'done' | 'leave' | 'shell' | 'shellDone' | 'github' | 'character';
 
 /** Pergunta ainda sem resposta (o balão dela já diz que o agente espera você). */
 function isOpenQuestion(a: Activity | undefined): boolean {
@@ -144,7 +164,24 @@ function zeroStats(): AgentStats {
 function cloneAgent(a: AgentInfo): AgentInfo {
   const c: AgentInfo = { ...a, recent: a.recent.slice(), tasks: a.tasks.map((t) => ({ ...t })), stats: { ...a.stats } };
   if (a.shells) c.shells = a.shells.map((j) => ({ ...j }));
+  if (a.parts) c.parts = { ...a.parts };
   return c;
+}
+
+/**
+ * Nomes em uso, comparados sem diferenciar caixa nem forma Unicode: pickName e NameStore.assign só chamam `has`, então
+ * "Ana" (guardado ou do pool) conta como ocupado quando "ana" foi escolhido para uma sala.
+ */
+class NameSet extends Set<string> {
+  private folded = new Set<string>();
+  override add(name: string): this {
+    // O construtor de Set chama add antes dos campos existirem: só use `new NameSet()` sem argumentos.
+    this.folded?.add(nameKey(name));
+    return super.add(name);
+  }
+  override has(name: string): boolean {
+    return this.folded.has(nameKey(name));
+  }
 }
 
 const byStart = (a: ShellJob, b: ShellJob) => a.startedAt - b.startedAt || a.id.localeCompare(b.id);
@@ -165,6 +202,8 @@ export class Office {
   private demo: DemoSimulator | null = null;
   private demoSnap: OfficeSnapshot | null = null;
   private booting = false;
+  /** Fontes bootando agora (beginBoot/endBoot contados): o boot só termina quando todas terminaram. */
+  private bootDepth = 0;
   private bootFeed: FeedItem[] = [];
   /** Festa/alarme das salas (eventos do GitHub). */
   private effects = new RoomEffects();
@@ -188,13 +227,21 @@ export class Office {
 
   // ---------------------------------------------------------------- boot
 
-  /** Durante o boot: sem avisos; o feed é montado em ordem cronológica no final. */
+  /**
+   * Durante o boot: sem avisos; o feed é montado em ordem cronológica no final. Contado: cada fonte de agentes
+   * (sources/source.ts) chama beginBoot ao começar a reconstruir as sessões abertas e endBoot ao terminar (num
+   * `finally`, inclusive se o boot for assíncrono); o escritório só fica "pronto" (feed ordenado, balões de
+   * espera, sem avisos atrasados) quando a última termina.
+   */
   beginBoot(): void {
+    if (this.bootDepth++ > 0) return;
     this.booting = true;
     this.bootFeed = [];
   }
 
   endBoot(): void {
+    if (this.bootDepth === 0) return; // endBoot sem beginBoot: ignorado
+    if (--this.bootDepth > 0) return;
     this.booting = false;
     const sorted = this.bootFeed.sort((a, b) => a.activity.at - b.activity.at).slice(-FEED_LIMIT);
     this.bootFeed = [];
@@ -212,6 +259,11 @@ export class Office {
     this.markDirty();
   }
 
+  /** Alguma fonte ainda está bootando. */
+  isBooting(): boolean {
+    return this.booting;
+  }
+
   // ---------------------------------------------------------------- consultas
 
   has(id: string): boolean {
@@ -225,6 +277,11 @@ export class Office {
   /** Agentes reais presentes (inclusive em período de graça). */
   list(): AgentInfo[] {
     return [...this.agents.values()].map((r) => r.info);
+  }
+
+  /** Pasta do projeto da sala (cwd original, sem normalizar). */
+  roomPath(roomId: string): string | undefined {
+    return this.rooms.get(roomId)?.path;
   }
 
   roomName(roomId: string): string {
@@ -259,7 +316,8 @@ export class Office {
     }
     const roomId = normalizeCwd(p.cwd);
     this.ensureRoom(roomId, now);
-    const person = this.deps.names.assign(p.sessionId, this.usedNames());
+    const chosen = this.roomCharacter(roomId, p.id, p.sessionId);
+    const person = chosen ?? this.deps.names.assign(p.sessionId, this.takenNames());
     const info: AgentInfo = {
       id: p.id,
       kind: 'main',
@@ -276,8 +334,13 @@ export class Office {
       lastEventAt: p.startedAt,
       statusSince: now,
       stats: zeroStats(),
-      seed: hash32(p.id),
+      seed: chosen?.seed ?? hash32(p.id),
     };
+    if (p.provider && p.provider !== 'claude') info.provider = p.provider;
+    if (chosen) {
+      info.custom = true;
+      if (chosen.parts) info.parts = { ...chosen.parts };
+    }
     if (p.status === 'waiting') info.waitingFor = p.waitingFor ?? 'responder no terminal';
     const rec: AgentRecord = { info, history: [] };
     if (p.status === 'working') rec.turnStart = now;
@@ -292,7 +355,14 @@ export class Office {
     const rec = this.agents.get(id);
     if (!rec || rec.info.sessionId === sessionId) return;
     const info = rec.info;
-    this.deps.names.remember(sessionId, { name: info.name, look: info.look });
+    // Personagem do projeto: o nome escolhido não vira o nome sorteado da sessão nova, e a sessão nova vira a dona dele
+    // (se outro agente da sala salvou por último, o dono é ele e fica como está).
+    if (info.custom) {
+      const owner = this.deps.names.character(info.roomId)?.owner;
+      if (owner === undefined || owner === info.sessionId) this.deps.names.claimCharacter(info.roomId, sessionId);
+    } else {
+      this.deps.names.remember(sessionId, { name: info.name, look: info.look });
+    }
     info.sessionId = sessionId;
     info.tasks = [];
     info.stats = zeroStats();
@@ -509,7 +579,7 @@ export class Office {
       this.reactivateSub(p.id);
       return true;
     }
-    const person = this.deps.names.assign(p.id, this.usedNames());
+    const person = this.deps.names.assign(p.id, this.takenNames());
     const info: AgentInfo = {
       id: p.id,
       kind: 'sub',
@@ -529,6 +599,7 @@ export class Office {
       stats: zeroStats(),
       seed: hash32(p.id),
     };
+    if (parent.info.provider) info.provider = parent.info.provider;
     if (p.title) info.title = p.title;
     if (p.background) info.background = true;
     this.agents.set(p.id, { info, history: [], turnStart: now });
@@ -666,11 +737,16 @@ export class Office {
 
   // ---------------------------------------------------------------- pedidos de permissão (server/permissions)
 
-  /** Aviso de pedido de permissão vindo do hook; usa o dedupe do "precisa de você" (o mesmo pedido, outro caminho). */
-  noticePermission(id: string, what: string): void {
+  /**
+   * Aviso de pedido de permissão (ou de pergunta do AskUserQuestion) vindo do hook; usa o dedupe do "precisa de
+   * você" (o mesmo pedido, outro caminho).
+   */
+  noticePermission(id: string, what: string, kind: 'permission' | 'question' = 'permission'): void {
     const info = this.agents.get(id)?.info;
     if (!info) return;
-    this.notice('wait', id, 'alert', `🔐 ${info.name} pede permissão em ${this.roomName(info.roomId)}: ${what}`, info.roomId);
+    const room = this.roomName(info.roomId);
+    const text = kind === 'question' ? `❓ ${info.name} tem uma pergunta em ${room}: ${what}` : `🔐 ${info.name} pede permissão em ${room}: ${what}`;
+    this.notice('wait', id, 'alert', text, info.roomId);
     this.markDirty();
   }
 
@@ -689,6 +765,23 @@ export class Office {
     return this.demoSnap?.agents.find((a) => a.permission?.id === requestId)?.permission;
   }
 
+  // ---------------------------------------------------------------- mensagens pelo escritório (server/messages)
+
+  /** Agente fictício do demo (só existe no snapshot), para o registro de mensagens. */
+  demoAgent(id: string): AgentInfo | undefined {
+    return this.demoSnap?.agents.find((a) => a.id === id);
+  }
+
+  /** Entrega fictícia de uma mensagem a um agente do demo. false = ele já saiu (ou o demo foi desligado). */
+  deliverDemoMessage(agentId: string, text: string): boolean {
+    if (!this.demo) return false;
+    const now = this.now();
+    if (!this.demo.receiveMessage(agentId, text, now)) return false;
+    this.demoSnap = this.demo.snapshot(now);
+    this.markDirty();
+    return true;
+  }
+
   // ---------------------------------------------------------------- demonstração
 
   setDemo(enabled: boolean): void {
@@ -703,6 +796,101 @@ export class Office {
     }
     this.recomputeRoomNames();
     this.markDirty();
+  }
+
+  // ---------------------------------------------------------------- personagem do projeto (editor)
+
+  /** Escolhe nome e aparência do agente principal `id` e grava como o personagem da sala dele. */
+  setCharacter(id: string, input: CharacterInput): CharacterResult {
+    const rec = this.editable(id);
+    if (!rec) return { result: 'not-found' };
+    const info = rec.info;
+    // Quem está saindo conta aqui: ao reabrir dentro do período de graça, ele volta com o nome dele.
+    const conflict = this.nameConflict(input.name, id, info.roomId, true);
+    if (conflict) return { result: 'conflict', message: conflict };
+    const before = info.name;
+    const parts = Object.keys(input.parts).length ? { ...input.parts } : undefined;
+    // Outro principal da sala que estava com o personagem continua com o nome atual, agora guardado como o da sessão
+    // dele: depois de um reinício, cada sessão volta quem era, e não com o personagem que esta salvou.
+    for (const r of this.agents.values()) {
+      const o = r.info;
+      if (o.id === id || o.kind !== 'main' || o.roomId !== info.roomId || !o.custom) continue;
+      this.deps.names.remember(o.sessionId, { name: o.name, look: o.look });
+      delete o.custom;
+    }
+    this.deps.names.setCharacter(info.roomId, { name: input.name, look: info.look, seed: input.seed, ...(parts ? { parts } : {}), owner: info.sessionId });
+    info.name = input.name;
+    info.seed = input.seed;
+    if (parts) info.parts = parts;
+    else delete info.parts;
+    info.custom = true;
+    const room = this.roomName(info.roomId);
+    const text = before === input.name ? `✏️ ${input.name} mudou de visual em ${room}` : `✏️ ${before} agora é ${input.name} em ${room}`;
+    this.notice('character', id, 'info', text, info.roomId, { dedupeMs: 0 });
+    this.markDirty();
+    return { result: 'ok' };
+  }
+
+  /**
+   * "Voltar ao sorteio": o agente volta ao nome da sessão e à seed do id; a sala só perde o personagem se ele for desta
+   * sessão (o que outra sessão da sala salvou depois continua dela).
+   */
+  resetCharacter(id: string): 'ok' | 'not-found' {
+    const rec = this.editable(id);
+    if (!rec) return 'not-found';
+    const info = rec.info;
+    const owner = this.deps.names.character(info.roomId)?.owner;
+    if (owner === undefined || owner === info.sessionId) this.deps.names.clearCharacter(info.roomId);
+    if (info.custom) {
+      const person = this.deps.names.assign(info.sessionId, this.takenNames(id));
+      info.name = person.name;
+      info.look = person.look;
+      info.seed = hash32(id);
+      delete info.parts;
+      delete info.custom;
+    }
+    this.markDirty();
+    return 'ok';
+  }
+
+  /** Agente principal real e presente (nem subagente, nem demo, nem saindo). */
+  private editable(id: string): AgentRecord | undefined {
+    const rec = this.agents.get(id);
+    return rec && rec.info.kind === 'main' && rec.removeAt === undefined ? rec : undefined;
+  }
+
+  /**
+   * Personagem escolhido para a sala, se o nome dele estiver livre; quem o recebe vira a dona. Quem está saindo não
+   * conta: costuma ser a mesma sessão reaberta (pid novo) dentro do período de graça. Uma sessão que não é a dona e já
+   * tem nome guardado mantém o dela: depois de um reinício, a ordem de chegada não troca identidades nem muda o
+   * personagem de uma sessão no meio dela.
+   */
+  private roomCharacter(roomId: string, id: string, sessionId: string): StoredCharacter | undefined {
+    const c = this.deps.names.character(roomId);
+    if (!c) return undefined;
+    if (c.owner !== undefined && c.owner !== sessionId && this.deps.names.get(sessionId)) return undefined;
+    if (this.nameConflict(c.name, id, roomId)) return undefined;
+    this.deps.names.claimCharacter(roomId, sessionId);
+    return c;
+  }
+
+  /**
+   * Por que `name` não pode ser o personagem de `id` na sala `roomId` (undefined = pode). Quem está saindo só conta com
+   * `leaving`: na chegada costuma ser a mesma sessão reaberta; no editor, é alguém que pode voltar com esse nome.
+   */
+  private nameConflict(name: string, id: string, roomId: string, leaving = false): string | undefined {
+    const key = nameKey(name);
+    for (const r of this.agents.values()) {
+      if (r.info.id === id || (r.removeAt !== undefined && !leaving) || nameKey(r.info.name) !== key) continue;
+      return `${r.info.name} já está no escritório em ${this.roomName(r.info.roomId)}`;
+    }
+    for (const a of this.demoSnap?.agents ?? []) {
+      if (nameKey(a.name) === key) return `${a.name} já está no escritório em ${this.roomName(a.roomId)}`;
+    }
+    for (const [n, room] of this.deps.names.reservedNames(roomId)) {
+      if (nameKey(n) === key) return `${n} já é o personagem de ${this.roomName(room)}`;
+    }
+    return undefined;
   }
 
   // ---------------------------------------------------------------- relógio
@@ -775,6 +963,15 @@ export class Office {
     }
     const perms = this.deps.permissions?.();
     const real = [...this.agents.values()].map((r) => applyPermission(cloneAgent(r.info), perms?.get(r.info.id)));
+    const reach = this.deps.messages?.();
+    // Mensagens pelo escritório: principais presentes cuja sessão está com o plugin conectado. No demo quem decide é
+    // o simulador; com o recurso desligado, ninguém recebe.
+    for (const a of real) if (reach?.has(a.id) && a.kind === 'main' && a.status !== 'offline' && a.status !== 'done') a.canMessage = true;
+    const demoAgents = (this.demoSnap?.agents ?? []).map((a) => {
+      if (reach || !a.canMessage) return a;
+      const { canMessage: _off, ...rest } = a;
+      return rest;
+    });
     const trim = (a: AgentInfo): AgentInfo => (a.recent.length > SNAPSHOT_RECENT ? { ...a, recent: a.recent.slice(-SNAPSHOT_RECENT) } : a);
     const sessions = new Map<string, number>();
     for (const a of real) if (a.kind === 'main' && a.status !== 'offline') sessions.set(a.account, (sessions.get(a.account) ?? 0) + 1);
@@ -782,7 +979,7 @@ export class Office {
       rev: this.rev,
       serverTime: now,
       rooms,
-      agents: [...real, ...(this.demoSnap?.agents ?? [])].map(trim),
+      agents: [...real, ...demoAgents].map(trim),
       accounts: [...this.deps.accounts(sessions), ...(this.demoSnap?.accounts ?? [])],
       meta: {
         demo: this.isDemo(),
@@ -791,14 +988,18 @@ export class Office {
         version: this.deps.version,
         build: this.deps.build?.(),
         terminal: this.deps.terminal === true,
+        messages: this.deps.messages !== undefined,
         updates: this.deps.updates?.(),
       },
     };
   }
 
-  private usedNames(): Set<string> {
-    const used = new Set([...this.agents.values()].map((r) => r.info.name));
+  /** Nomes que o sorteio não pode dar: os de quem está no escritório (menos `exceptId`) e os escolhidos para as salas. */
+  private takenNames(exceptId?: string): Set<string> {
+    const used = new NameSet();
+    for (const r of this.agents.values()) if (r.info.id !== exceptId) used.add(r.info.name);
     for (const a of this.demoSnap?.agents ?? []) used.add(a.name);
+    for (const n of this.deps.names.reservedNames().keys()) used.add(n);
     return used;
   }
 
@@ -828,6 +1029,16 @@ export class Office {
     const paths = new Map([...this.rooms].map(([id, r]) => [id, r.path]));
     for (const r of this.demoSnap?.rooms ?? []) paths.set(r.id, r.path);
     this.roomNames = roomDisplayNames(paths);
+    for (const [id, path] of paths) {
+      const alias = this.deps.roomAlias?.(path);
+      if (alias) this.roomNames.set(id, alias);
+    }
+  }
+
+  /** Um nome de sala mudou (renomear): recalcula e transmite. */
+  refreshRoomNames(): void {
+    this.recomputeRoomNames();
+    this.markDirty();
   }
 
   private pushFeed(items: FeedItem[]): void {

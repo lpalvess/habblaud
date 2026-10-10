@@ -1,5 +1,5 @@
 {
-  "description": "Responder pelo escritório: manda cada pedido de permissão para o Habblaud local (porta em HABBLAUD_PORT, padrão 4747) e espera a resposta por até 5 min; fora do ar ou sem página aberta, sai na hora e vale o terminal.",
+  "description": "Responder pelo escritório: manda cada pedido de permissão (e pergunta do AskUserQuestion) para o Habblaud local (porta em HABBLAUD_PORT, padrão 4747) e espera a resposta por até 5 min; fora do ar ou sem página aberta, sai na hora e vale o terminal.",
   "hooks": {
     "PermissionRequest": [
       {

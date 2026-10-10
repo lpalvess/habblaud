@@ -4,7 +4,8 @@
 // SSE segue conectado por baixo, com os snapshots ao vivo guardados até o stopReplay().
 // Também cuida da reconexão: quando o navegador desiste do stream (EventSource fechado após erro HTTP,
 // ex.: servidor reiniciando atrás de um proxy), tenta de novo com espera crescente.
-import type { Activity, AgentDetail, AgentInfo, FeedItem, Notice, OfficeSnapshot, PermissionDecision, PermissionRequestInfo, RoomInfo } from '../../../shared/types';
+import type { AppearanceParts } from '../../../shared/appearance';
+import type { Activity, AgentDetail, AgentInfo, FeedItem, Notice, OfficeSnapshot, OutboxMessage, PermissionDecision, PermissionRequestInfo, RoomInfo } from '../../../shared/types';
 import { DemoSimulator } from '../../../shared/demo/simulator';
 
 export type ConnectionState = 'connecting' | 'open' | 'closed' | 'mock';
@@ -58,8 +59,11 @@ export function reconnectDelay(attempt: number): number {
   return Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** Math.max(0, attempt));
 }
 
-/** Opções do simulador a partir da query string (?speed=2&sessions=6). `sessions=0` vale: escritório vazio. */
-export function mockOptionsFrom(search: string): { speed: number; sessions: number } {
+/**
+ * Opções do simulador a partir da query string (?speed=2&sessions=6). `sessions=0` vale: escritório vazio. Para
+ * capturas de tela: `seed=N` repete o mesmo escritório e `noquota=1` deixa a conta do Codex "sem cota".
+ */
+export function mockOptionsFrom(search: string): { speed: number; sessions: number; seed?: number; codexNoQuota?: boolean } {
   const params = new URLSearchParams(search);
   const num = (name: string): number | null => {
     const raw = params.get(name);
@@ -69,9 +73,12 @@ export function mockOptionsFrom(search: string): { speed: number; sessions: numb
   };
   const speed = num('speed');
   const sessions = num('sessions');
+  const seed = num('seed');
   return {
     speed: speed !== null && speed > 0 ? Math.min(speed, 50) : 1,
     sessions: sessions !== null && sessions >= 0 ? Math.min(Math.floor(sessions), 40) : 4,
+    ...(seed !== null && seed >= 0 ? { seed: Math.floor(seed) } : {}),
+    ...(params.get('noquota') === '1' ? { codexNoQuota: true } : {}),
   };
 }
 
@@ -260,6 +267,94 @@ export class OfficeStore {
       // Resposta sem JSON (ex.: guard): usa a mensagem padrão.
     }
     return `Não foi possível responder (erro ${res.status}).`;
+  }
+
+  /**
+   * Grava o personagem do projeto (PUT /api/agents/:id/character). Devolve undefined se deu certo, ou a mensagem de
+   * erro (nome em uso, acesso que não é local...).
+   */
+  async saveCharacter(id: string, body: { name: string; seed: number; parts: AppearanceParts }): Promise<string | undefined> {
+    return this.characterRequest(id, 'PUT', body);
+  }
+
+  /** "Voltar ao sorteio": apaga o personagem do projeto (DELETE /api/agents/:id/character). */
+  async resetCharacter(id: string): Promise<string | undefined> {
+    return this.characterRequest(id, 'DELETE', {});
+  }
+
+  private async characterRequest(id: string, method: 'PUT' | 'DELETE', body: object): Promise<string | undefined> {
+    if (this.mock || this.replay) return 'Editar o personagem só funciona com o escritório ao vivo.';
+    let res: Response;
+    try {
+      res = await fetch(`/api/agents/${encodeURIComponent(id)}/character`, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      return 'Sem conexão com o Habblaud.';
+    }
+    if (res.ok) return undefined;
+    try {
+      const data = (await res.json()) as { error?: unknown };
+      if (typeof data.error === 'string') return data.error;
+    } catch {
+      // Resposta sem JSON (ex.: guard): usa a mensagem padrão.
+    }
+    return `Não foi possível salvar o personagem (erro ${res.status}).`;
+  }
+
+  // ---------------------------------------------------------------- mensagens pelo escritório
+
+  /**
+   * Manda uma mensagem a um agente (POST /api/messages): a mensagem criada (status `queued`) ou o erro do servidor
+   * (agente que não recebe mensagens, fila cheia, acesso que não é local...). Sem conexão com o servidor: lança.
+   * No ?mock=1 a entrega é fictícia (o simulador põe a atividade no agente).
+   */
+  async sendMessage(agentId: string, text: string): Promise<{ message: OutboxMessage } | { error: string }> {
+    if (this.mock) return this.mockSend(agentId, text);
+    const res = await fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agentId, text }) });
+    let body: unknown;
+    try {
+      body = await res.json();
+    } catch {
+      // Resposta sem JSON (ex.: guard): usa a mensagem padrão.
+    }
+    if (res.status === 201 && body && typeof body === 'object') return { message: body as OutboxMessage };
+    const error = (body as { error?: unknown } | undefined)?.error;
+    return { error: typeof error === 'string' ? error : `erro ${res.status}` };
+  }
+
+  /** Situação de uma mensagem (GET /api/messages/:id). null = o servidor não a conhece (404). Sem conexão: lança. */
+  async messageStatus(id: string): Promise<OutboxMessage | null> {
+    if (this.mock) {
+      const m = this.mockOutbox.get(id);
+      return m ? { ...m } : null;
+    }
+    const res = await fetch(`/api/messages/${encodeURIComponent(id)}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`erro ${res.status}`);
+    return (await res.json()) as OutboxMessage;
+  }
+
+  /** Mensagens do ?mock=1 (entregues pelo simulador depois de ~1 s). */
+  private mockOutbox = new Map<string, OutboxMessage>();
+  private mockSeq = 0;
+
+  private mockSend(agentId: string, text: string): { message: OutboxMessage } | { error: string } {
+    const a = this.agent(agentId);
+    if (!a) return { error: 'agente desconhecido: ele já saiu do escritório?' };
+    if (!a.canMessage || a.kind !== 'main' || a.status === 'offline') return { error: 'este agente não recebe mensagens agora' };
+    const now = Date.now();
+    const msg: OutboxMessage = { id: `mock-${now.toString(36)}-${++this.mockSeq}`, agentId, status: 'queued', createdAt: now, updatedAt: now };
+    this.mockOutbox.set(msg.id, msg);
+    setTimeout(() => {
+      const sim = this.mockSim;
+      const ok = !!sim?.receiveMessage(agentId, text);
+      Object.assign(msg, { status: ok ? 'delivered' : 'failed', updatedAt: Date.now() }, ok ? {} : { error: 'o agente saiu do escritório' });
+      if (ok && sim) this.applySnapshot(sim.snapshot());
+    }, 1_000);
+    return { message: { ...msg } };
   }
 
   // ---------------------------------------------------------------- internos

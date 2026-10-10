@@ -12,6 +12,10 @@
 //    credenciais e configurações — e a pasta do uso capturado pelo statusline
 //    (~/.habblaud/usage, criada se faltar) em /usage, também somente leitura. Passa
 //    HABBLAUD_CLAUDE_DIRS, HABBLAUD_ACCOUNTS, HABBLAUD_USAGE_DIR e o fuso do host (TZ) ao container.
+//    Contas do Codex (~/.codex*, CODEX_HOME ou HABBLAUD_CODEX_DIRS; HABBLAUD_CODEX=0 desliga): SOMENTE
+//    sessions/, archived_sessions/ e thread-writer-locks/ de cada uma, somente leitura, em /codex/<conta>/... —
+//    nunca auth.json, config.toml, shell_snapshots/, history.jsonl, logs nem os SQLite. Vão em HABBLAUD_CODEX_DIRS
+//    e, com `provider: 'codex'` e a pasta do HOST (onde o `codex queue` roda), em HABBLAUD_ACCOUNTS.
 // 3. Migra o que sobrou do nome antigo (CodeTown, até a 0.3.2): ~/.codetown vira ~/.habblaud, o container
 //    `codetown` e a rede codetown_default saem e, se o volume novo ainda não existe, os dados de
 //    codetown_codetown-data são copiados para ele (o antigo fica, para apagar à mão). Avisa de CODETOWN_*
@@ -19,7 +23,8 @@
 // 4. Roda `docker compose up -d --build`, espera o /api/health e mostra a URL.
 // 5. Atualiza o mod do Habblaud nas contas onde ele JÁ está instalado com outra versão (depois de
 //    atualizar o Habblaud): relê o marketplace desta pasta e roda `claude plugin update` com o
-//    CLAUDE_CONFIG_DIR de cada conta. Nunca instala sozinho; se o `claude` faltar ou falhar, é só um aviso.
+//    CLAUDE_CONFIG_DIR de cada conta. Nunca instala sozinho; se o `claude` faltar ou falhar, é só um aviso. Numa
+//    conta com o mod e sem o plugin de mensagens (que veio depois), só dá a dica de rodar o npm run mod:install.
 //
 // Uso de 5h/semanal ao vivo: o mod do Habblaud (npm run mod:install; Claude Code 2.1.287+) ou, em
 // versões anteriores, o tap de statusline (npm run usage:install). Os dois gravam os números na pasta
@@ -30,7 +35,8 @@ import { homedir } from 'node:os';
 import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { AccountInfo, SourceInfo } from '../shared/types';
-import { detectAccounts, discoverClaudeDirs, type DetectedAccount } from '../server/accounts/detect';
+import { codexDirsRefused, detectAccounts, discoverClaudeDirs, type DetectedAccount } from '../server/accounts/detect';
+import { detectCodexAccounts, discoverCodexDirs } from '../server/sources/codex/accounts';
 import { describeStateMigration, LEGACY_NAME, legacyEnvWarning, migrateLegacyStateDir } from '../server/legacy';
 import { makeClaudeRunner, MIN_CLAUDE_VERSION, readPackageVersion, updateInstalledMods, type ModUpdateResult } from './mod-install';
 
@@ -49,6 +55,13 @@ const SERVICE = 'habblaud';
 const CONTAINER_ROOT = '/claude';
 /** Somente estas subpastas de cada conta entram no container. */
 const MOUNTED_SUBDIRS = ['projects', 'sessions'] as const;
+/** Raiz das montagens do Codex dentro do container: /codex/<conta>/{sessions,archived_sessions,thread-writer-locks}. */
+const CODEX_CONTAINER_ROOT = '/codex';
+/**
+ * Somente estas subpastas de cada pasta do Codex entram no container (as conversas e os locks das sessões abertas).
+ * auth.json, config.toml, shell_snapshots/, history.jsonl, logs e os SQLite ficam no host.
+ */
+export const CODEX_MOUNTED_SUBDIRS = ['sessions', 'archived_sessions', 'thread-writer-locks'] as const;
 const DEFAULT_PORT = 4747;
 const HEALTH_TIMEOUT_MS = 120_000;
 /** Imagem e volume de dados como o Compose os nomeia (`name: habblaud` no docker-compose.yml). */
@@ -69,8 +82,9 @@ Opções:
   --down       derruba o container (o mesmo que npm run docker:down)
   -h, --help   mostra esta ajuda
 
-Variáveis: HABBLAUD_PORT (porta no host, padrão ${DEFAULT_PORT}) e HABBLAUD_CLAUDE_DIRS
-(config dirs separados por vírgula, se as contas não estiverem em ~/.claude*).`;
+Variáveis: HABBLAUD_PORT (porta no host, padrão ${DEFAULT_PORT}), HABBLAUD_CLAUDE_DIRS
+(config dirs separados por vírgula, se as contas não estiverem em ~/.claude*), HABBLAUD_CODEX_DIRS
+(pastas do Codex, se não estiverem em ~/.codex* nem em CODEX_HOME) e HABBLAUD_CODEX=0 (sem o Codex).`;
 
 // ---------------------------------------------------------------------------------------------
 // Saída no terminal
@@ -152,6 +166,8 @@ type CachedUsage = { fetchedAtMs: unknown; utilization: Partial<Record<(typeof U
 
 export interface AccountPayload {
   id: string;
+  /** Só nas contas do Codex (ausente = Claude Code). */
+  provider?: 'codex';
   configDir: string;
   mountDir: string;
   short: string;
@@ -191,6 +207,41 @@ export function planMounts(dirs: string[], accounts: DetectedAccount[], resolveD
     if (binds.length) out.push({ account, hostDir, mountDir, binds });
   });
   return out;
+}
+
+/**
+ * Monta só sessions/, archived_sessions/ e thread-writer-locks/ de cada pasta do Codex (as que existirem), em
+ * /codex/<id>. `accounts` vem de detectCodexAccounts(dirs), na mesma ordem de `dirs`; o id vira o nome da pasta no
+ * container, então o servidor lá dentro deriva o mesmo id.
+ */
+export function planCodexMounts(dirs: string[], accounts: DetectedAccount[], resolveDir: (p: string) => string | undefined = realDir): AccountMount[] {
+  const out: AccountMount[] = [];
+  dirs.forEach((hostDir, i) => {
+    const account = accounts[i];
+    const mountDir = posix.join(CODEX_CONTAINER_ROOT, account.id);
+    const binds: BindMount[] = [];
+    for (const sub of CODEX_MOUNTED_SUBDIRS) {
+      const source = resolveDir(join(hostDir, sub));
+      if (source) binds.push({ source, target: posix.join(mountDir, sub) });
+    }
+    if (binds.length) out.push({ account, hostDir, mountDir, binds });
+  });
+  return out;
+}
+
+/** Metadados das contas do Codex para HABBLAUD_ACCOUNTS: `provider: 'codex'` e a pasta do HOST em `configDir`. */
+export function codexAccountsPayload(mounts: AccountMount[]): AccountPayload[] {
+  return mounts.map(({ account: a, hostDir, mountDir }) => {
+    const p: AccountPayload = { id: a.id, provider: 'codex', configDir: hostDir, mountDir, short: a.short, name: a.name, color: a.color };
+    if (a.plan) p.plan = a.plan;
+    return p;
+  });
+}
+
+/** HABBLAUD_CODEX desligado (0, false, off, no) no ambiente de quem roda o docker:up. */
+export function codexDisabled(env: NodeJS.ProcessEnv): boolean {
+  const v = env.HABBLAUD_CODEX?.trim();
+  return !!v && !/^(1|true|yes|sim|on)$/i.test(v);
 }
 
 /**
@@ -254,25 +305,28 @@ export function hostTimeZone(env: NodeJS.ProcessEnv = process.env): string | und
 
 /**
  * `usageDir`: pasta do host com o uso capturado pelo tap de statusline (já existente; caminho real),
- * montada somente leitura em /usage. `timeZone`: fuso do host, repassado como TZ.
+ * montada somente leitura em /usage. `timeZone`: fuso do host, repassado como TZ. `codex`: montagens das contas do
+ * Codex (planCodexMounts).
  */
-export function renderOverride(mounts: AccountMount[], generatedAt: Date = new Date(), usageDir?: string, timeZone?: string): string {
+export function renderOverride(mounts: AccountMount[], generatedAt: Date = new Date(), usageDir?: string, timeZone?: string, codex: AccountMount[] = []): string {
   const env: Array<[string, string]> = [
     ['HABBLAUD_CLAUDE_DIRS', mounts.map((m) => m.mountDir).join(',')],
-    ['HABBLAUD_ACCOUNTS', JSON.stringify(accountsPayload(mounts))],
+    ['HABBLAUD_ACCOUNTS', JSON.stringify([...accountsPayload(mounts), ...codexAccountsPayload(codex)])],
   ];
+  if (codex.length) env.push(['HABBLAUD_CODEX_DIRS', codex.map((m) => m.mountDir).join(',')]);
   if (usageDir) env.push(['HABBLAUD_USAGE_DIR', CONTAINER_USAGE_DIR]);
   if (timeZone) env.push(['TZ', timeZone]);
   const lines = [
     `# Gerado por scripts/docker-up.ts em ${generatedAt.toISOString()} — não edite: é recriado a cada \`npm run docker:up\`.`,
     '# Contém caminhos do host e e-mails das contas: fica fora do git e com permissão 600.',
     '# Montagens: SOMENTE <conta>/projects, <conta>/sessions e a pasta do uso do statusline, todas somente leitura.',
+    ...(codex.length ? ['# Codex: SOMENTE <pasta>/sessions, <pasta>/archived_sessions e <pasta>/thread-writer-locks, somente leitura.'] : []),
     'services:',
     `  ${SERVICE}:`,
     '    environment:',
     ...env.map(([k, v]) => `      ${k}: ${yamlString(v)}`),
   ];
-  const binds = mounts.flatMap((m) => m.binds);
+  const binds = [...mounts, ...codex].flatMap((m) => m.binds);
   if (usageDir) binds.push({ source: usageDir, target: CONTAINER_USAGE_DIR });
   if (binds.length) {
     lines.push('    volumes:');
@@ -297,7 +351,7 @@ export function renderOverride(mounts: AccountMount[], generatedAt: Date = new D
 export function modHint(mod: Pick<ModUpdateResult, 'installed' | 'unavailable'>): string[] {
   if (mod.installed || mod.unavailable) return [];
   return [
-    `  Uso de 5h/semanal ao vivo e responder pelo escritório: npm run mod:install (uma vez; Claude Code ${MIN_CLAUDE_VERSION}+).`,
+    `  Uso de 5h/semanal ao vivo, responder e mandar mensagens pelo escritório: npm run mod:install (uma vez; Claude Code ${MIN_CLAUDE_VERSION}+).`,
     '  Em versões anteriores do Claude Code: npm run usage:install e npm run hooks:install. Sem eles, vale o cache do /usage.',
   ];
 }
@@ -593,12 +647,30 @@ async function up(opts: Options, port: number): Promise<void> {
   for (const dir of dirs) {
     if (!mounts.some((m) => m.hostDir === dir)) warn(`${tildify(dir)} não tem projects/ nem sessions/; conta ignorada.`);
   }
+  // Pasta do Codex (CODEX_HOME) listada ou achada como se fosse do Claude Code: não é montada como conta do Claude.
+  // Ela entra (só as conversas e os locks) como conta do Codex, logo abaixo.
+  const claudeRefused = codexDirsRefused(process.env, HOME);
+  const codexDirs = codexDisabled(process.env) ? [] : discoverCodexDirs(process.env, HOME);
+  for (const dir of claudeRefused) if (!codexDirs.includes(dir)) warn(`${tildify(dir)} é uma pasta do Codex, não do Claude Code; conta ignorada.`);
+  const codexAccounts = detectCodexAccounts(codexDirs, {
+    home: HOME,
+    env: process.env,
+    taken: { shorts: accounts.map((a) => a.short), colors: accounts.map((a) => a.color) },
+  });
+  const codexMounts = planCodexMounts(codexDirs, codexAccounts);
+  for (const m of codexMounts) {
+    const subdirs = m.binds.map((b) => posix.basename(b.target)).join(', ');
+    say(`Codex ${m.account.short} (${m.account.id}): monta ${subdirs} de ${tildify(m.hostDir)}, somente leitura.`);
+    if (!m.binds.some((b) => b.target.endsWith('/thread-writer-locks'))) {
+      warn(`${tildify(m.hostDir)} ainda não tem thread-writer-locks/: no container, sessão aberta = conversa modificada nos últimos 30 min (rode o docker:up de novo depois de usar o Codex).`);
+    }
+  }
 
   migrateStateDir();
   const usageDir = ensureUsageDir();
   if (usageDir) say(`Uso ao vivo (mod ou tap de statusline): monta ${tildify(USAGE_DIR)} em ${CONTAINER_USAGE_DIR}, somente leitura.`);
   const tmp = `${OVERRIDE_FILE}.tmp`;
-  writeFileSync(tmp, renderOverride(mounts, new Date(), usageDir, hostTimeZone()), { mode: 0o600 });
+  writeFileSync(tmp, renderOverride(mounts, new Date(), usageDir, hostTimeZone(), codexMounts), { mode: 0o600 });
   chmodSync(tmp, 0o600);
   renameSync(tmp, OVERRIDE_FILE);
   say('docker-compose.override.yml gerado.');
@@ -618,6 +690,13 @@ async function up(opts: Options, port: number): Promise<void> {
     const usage = health.accounts?.find((a) => a.id === acc.id)?.usageStatus;
     const state = src.ok ? plural(src.sessions, 'sessão aberta', 'sessões abertas') : `erro ao ler (${src.error ?? 'desconhecido'})`;
     say(`  Conta ${acc.short} (${acc.id}): ${state}${usage ? ` · ${USAGE_STATUS[usage]}` : ''}`);
+  }
+  for (const m of codexMounts) {
+    const src = health.sources?.find((s) => s.label === m.account.id && s.provider === 'codex');
+    if (!src) continue;
+    const usage = health.accounts?.find((a) => a.id === m.account.id)?.usageStatus;
+    const state = src.ok ? plural(src.sessions, 'sessão aberta', 'sessões abertas') : `erro ao ler (${src.error ?? 'desconhecido'})`;
+    say(`  Codex ${m.account.short} (${m.account.id}): ${state}${usage ? ` · ${USAGE_STATUS[usage]}` : ''}`);
   }
   for (const line of modHint(updateMods(dirs, accounts))) say(line);
   // Com a cópia falha, os dados só existem no volume antigo: nada de sugerir apagá-lo.

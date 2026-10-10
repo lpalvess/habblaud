@@ -1,15 +1,17 @@
 // Plugins do Claude Code no próprio repositório (.claude-plugin/marketplace.json + mod/): versões alinhadas
-// com o package.json e estrutura que o Claude Code consegue carregar. O comportamento do mod em si é
-// testado pelo Claude Code (`claude plugin test` em mod/habblaud); aqui fica o que o vitest consegue
-// conferir sem o Claude Code: arquivos, versões, o hook de permissão do plugin rodando de verdade.
+// com o package.json e estrutura que o Claude Code consegue carregar. O comportamento dos mods em si é
+// testado pelo Claude Code (`claude plugin test` em mod/habblaud e mod/habblaud-mensagens); aqui fica o que o
+// vitest consegue conferir sem o Claude Code: arquivos, versões, o hook de permissão do plugin rodando de verdade.
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_TIMEOUT_S, hookCommand, hookEntry, STATUS_MESSAGE } from '../../scripts/hooks-install';
+import { posixShell } from './fixtures';
 
 const ROOT = resolve(__dirname, '../..');
-const PLUGINS = ['habblaud', 'habblaud-permissoes'];
+const SH = posixShell();
+const PLUGINS = ['habblaud', 'habblaud-permissoes', 'habblaud-mensagens'];
 
 type Rec = Record<string, unknown>;
 
@@ -49,7 +51,7 @@ describe('marketplace e plugins do Claude Code', () => {
     }
   });
 
-  it('marketplace "habblaud" com os dois plugins, cada um numa pasta que existe e com o mesmo nome', () => {
+  it('marketplace "habblaud" com os três plugins, cada um numa pasta que existe e com o mesmo nome', () => {
     expect(market.name).toBe('habblaud');
     expect(entries.map((e) => e.name)).toEqual(PLUGINS);
     for (const e of entries) {
@@ -63,7 +65,7 @@ describe('marketplace e plugins do Claude Code', () => {
     }
   });
 
-  it('hooks.json: o módulo do mod e o script do hook de permissão existem', () => {
+  it('hooks.json: os módulos dos mods e o script do hook de permissão existem', () => {
     for (const e of entries) {
       const dir = join(ROOT, String(e.source));
       const hooksJson = join(dir, 'hooks', 'hooks.json');
@@ -79,11 +81,14 @@ describe('marketplace e plugins do Claude Code', () => {
       }
     }
     expect(json('mod/habblaud/hooks/hooks.json').modules).toEqual(['./register.ts']);
+    expect(json('mod/habblaud-mensagens/hooks/hooks.json').modules).toEqual(['./register.ts']);
   });
 
-  it('o mod só importa arquivos dele mesmo e tipos de "claude-code" (regra do Claude Code)', () => {
-    for (const spec of importsOf(join(ROOT, 'mod/habblaud/hooks/register.ts'))) {
-      expect(spec === 'claude-code' || spec.startsWith('./') || spec.startsWith('../'), spec).toBe(true);
+  it('os mods só importam arquivos deles mesmos e tipos de "claude-code" (regra do Claude Code)', () => {
+    for (const mod of ['habblaud', 'habblaud-mensagens']) {
+      for (const spec of importsOf(join(ROOT, `mod/${mod}/hooks/register.ts`))) {
+        expect(spec === 'claude-code' || spec.startsWith('./') || spec.startsWith('../'), `${mod}: ${spec}`).toBe(true);
+      }
     }
   });
 });
@@ -108,14 +113,14 @@ describe('plugin habblaud-permissoes', () => {
     for (const spec of specs) expect(spec.startsWith('node:'), spec).toBe(true);
   });
 
-  it('o comando do plugin roda de verdade: com o Habblaud fora do ar, sai rápido e sem decisão', () => {
+  it.skipIf(!SH)('o comando do plugin roda de verdade: com o Habblaud fora do ar, sai rápido e sem decisão', () => {
     const input = JSON.stringify({ session_id: 's', hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'ls' } });
     const t0 = Date.now();
     // O Claude Code troca ${CLAUDE_PLUGIN_ROOT} no comando e também o exporta; o sh expande do ambiente igual.
-    const r = spawnSync('/bin/sh', ['-c', String(hooks[0]?.hook.command)], {
+    const r = spawnSync(SH!, ['-c', String(hooks[0]?.hook.command)], {
       input,
       encoding: 'utf8',
-      env: { PATH: `${dirname(process.execPath)}:${process.env.PATH ?? ''}`, CLAUDE_PLUGIN_ROOT: dir, HABBLAUD_PORT: '1' },
+      env: { PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ''}`, CLAUDE_PLUGIN_ROOT: dir, HABBLAUD_PORT: '1' },
       timeout: 10_000,
     });
     expect(r.status).toBe(0);

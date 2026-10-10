@@ -94,7 +94,7 @@ export class Toasts implements UiComponent {
     const toast: Toast = { key, notice: n, el, count, repeats: 1, timer: null, remaining: 0, startedAt: 0 };
     if (n.level === 'alert' && n.agentId) {
       const id = n.agentId;
-      toast.answer = h('button', { class: 'ui-toast__answer', type: 'button', text: 'Responder', title: 'Aprovar ou recusar pelo escritório', hidden: !agent?.permission, on: { click: () => focusPermission(this.ctx, id) } });
+      toast.answer = h('button', { class: 'ui-toast__answer', type: 'button', text: 'Responder', title: 'Responder pelo escritório (aprovar, recusar ou responder a pergunta)', hidden: !agent?.permission, on: { click: () => focusPermission(this.ctx, id) } });
       el.append(toast.answer);
     }
     el.append(iconButton(ICONS.close, 'Fechar aviso', () => this.dismiss(toast), 'ui-icon-btn--sm ui-toast__close'));

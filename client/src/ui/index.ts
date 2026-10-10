@@ -12,6 +12,7 @@ import type { OfficeStore } from '../net/store';
 import type { Selection, WorldApi } from '../world/api';
 import type { PanelName, UiComponent, UiContext } from './context';
 import { DayLauncher } from './daystats-launcher';
+import { RoomRenamer } from './roomrename';
 import { h } from './dom';
 import { Drawer } from './drawer';
 import { FeedPanel } from './feed';
@@ -19,6 +20,7 @@ import { HelpDialog } from './help';
 import { HistoryPopover } from './history';
 import { HoverTip } from './hovertip';
 import { hasRunningShells } from './model';
+import { hasCodexPermission } from './provider';
 import { Notifier } from './notify';
 import { ConnectionBanner, EmptyState, Splash } from './overlays';
 import { focusPermission, nextPermissionAgent } from './permission';
@@ -36,7 +38,7 @@ import { FreeArea } from './viewport';
 
 /** Relógio dos tempos relativos ("há 5 s"). */
 const CLOCK_MS = 5_000;
-/** Relógio do cronômetro dos shells ("12:31"), ligado só enquanto há shells rodando. */
+/** Relógio do cronômetro dos shells ("12:31") e do prazo dos pedidos do Codex, ligado só enquanto há um dos dois. */
 const SHELL_CLOCK_MS = 1_000;
 const NARROW_QUERY = '(max-width: 900px)';
 
@@ -148,7 +150,7 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
   topbar = new TopBar(ctx);
   sidebar = new Sidebar(ctx);
   const terminal = new TerminalPanel(ctx);
-  // Histórico de sessões (terminal somente leitura): botão no grupo dos painéis da barra superior.
+  // Histórico de sessões (terminal): botão no grupo dos painéis da barra superior.
   const history = new HistoryPopover(ctx, terminal);
   topbar.panelGroup.prepend(history.button);
   drawer = new Drawer(ctx, terminal);
@@ -159,6 +161,10 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
   help = new HelpDialog();
   const day = new DayLauncher(ctx, (el) => root.append(el));
   topbar.addPanelButton(day.button);
+  // Botão direito numa sala (lista lateral ou escritório): renomear.
+  const renamer = new RoomRenamer(ctx);
+  ctx.renameRoom = (id, at) => renamer.open(id, at);
+  world.onRoomContextMenu?.((id, at) => renamer.open(id, at));
   const empty = new EmptyState(ctx);
   const banner = new ConnectionBanner(ctx);
   const update = new UpdateBanner(store);
@@ -168,13 +174,14 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
   const scrim = h('div', { class: 'ui-scrim', attrs: { 'aria-hidden': 'true' }, on: { click: () => ctx.togglePanel('sidebar', false) } });
 
   root.classList.add('ui-root');
-  root.append(timelapse.vignette, topbar.el, sidebar.el, scrim, feed.el, drawer.el, terminal.el, timelapse.el, timelapse.badge, toasts.el, banner.el, update.el, empty.el, tip.el, settings.el, history.el, help.el, live, splash.el);
+  root.append(timelapse.vignette, topbar.el, sidebar.el, scrim, feed.el, drawer.el, terminal.el, timelapse.el, timelapse.badge, toasts.el, banner.el, update.el, empty.el, tip.el, settings.el, history.el, help.el, renamer.el, live, splash.el);
   area = new FreeArea(world, { root, topbar: topbar.el, sidebar: sidebar.el, drawer: drawer.el, feed: feed.el }, () => ({
     sidebar: panels.sidebar,
     feed: panels.feed,
-    drawer: selection !== null,
+    drawer: selection !== null && !drawer.floating,
     narrow: ctx.isNarrow(),
   }));
+  drawer.onLayoutChange = () => applyLayout();
 
   const components: UiComponent[] = [topbar, sidebar, drawer, terminal, history, feed, toasts, settings, empty, banner, tip, notifier, splash, timelapse, sound, day, updateToaster];
 
@@ -210,7 +217,7 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
   function applyLayout(opts: { refocus?: boolean } = {}): void {
     root.classList.toggle('has-sidebar', panels.sidebar);
     root.classList.toggle('has-feed', panels.feed);
-    root.classList.toggle('has-drawer', selection !== null);
+    root.classList.toggle('has-drawer', selection !== null && !drawer.floating);
     root.classList.toggle('is-narrow', ctx.isNarrow());
     area.sync(opts);
   }
@@ -248,7 +255,8 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
     if (!document.hidden) invalidate();
   }, CLOCK_MS);
   setInterval(() => {
-    if (!document.hidden && hasRunningShells(store.snapshot)) invalidate();
+    // Shells rodando (cronômetro) ou pedido do Codex esperando (prazo de segundos).
+    if (!document.hidden && (hasRunningShells(store.snapshot) || hasCodexPermission(store.snapshot))) invalidate();
   }, SHELL_CLOCK_MS);
 
   addEventListener('keydown', (e) => onKey(e));
@@ -299,11 +307,11 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
         break;
       case 'p':
       case 'P': {
-        // Próximo pedido de permissão para responder pelo escritório (só leva até ele: nunca aprova).
+        // Próximo pedido de permissão ou pergunta para responder pelo escritório (só leva até ele: nunca aprova).
         e.preventDefault();
         const next = nextPermissionAgent(store.snapshot?.agents ?? [], selection?.type === 'agent' ? selection.id : undefined);
         if (next) focusPermission(ctx, next.id);
-        else ctx.announce('Nenhum pedido de permissão para responder agora.');
+        else ctx.announce('Nenhum pedido de permissão ou pergunta para responder agora.');
         break;
       }
       case 'o':
@@ -327,7 +335,7 @@ export function createUI(root: HTMLElement, store: OfficeStore, world: WorldApi)
     }
   }
 
-  /** Atalho T: abre o terminal somente leitura do agente selecionado (ou fecha o que estiver aberto). */
+  /** Atalho T: abre o terminal do agente selecionado (ou fecha o que estiver aberto). */
   function toggleTerminal(): void {
     const id = selection?.type === 'agent' ? selection.id : null;
     if (terminal.isOpen && (id === null || terminal.agentId === id)) terminal.close();

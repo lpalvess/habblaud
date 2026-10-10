@@ -1,6 +1,7 @@
 // Hook PermissionRequest (mod/habblaud-permissoes/hooks/permission-hook.mjs) rodado como processo de verdade contra o servidor
-// de teste: stdin JSON → saída esperada (aprovar, recusar, "sempre permitir", terminal), saída rápida e
-// sem decisão quando o Habblaud está fora do ar, desligado ou sem páginas abertas, e o tempo limite.
+// de teste: stdin JSON → saída esperada (aprovar, recusar, "sempre permitir", terminal, responder as perguntas
+// do AskUserQuestion), saída rápida e sem decisão quando o Habblaud está fora do ar, desligado ou sem páginas
+// abertas, e o tempo limite.
 // Os processos são assíncronos (spawn): o servidor roda neste mesmo processo.
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
@@ -22,6 +23,20 @@ interface HookModule {
   decisionOutput(result: unknown, input: unknown): unknown;
 }
 const { decisionOutput, parseOptions, requestBody, trimInput } = (await import(pathToFileURL(HOOK).href)) as HookModule;
+
+/**
+ * tool_input de um AskUserQuestion. Os textos que voltam em `answers` são os ORIGINAIS (o escritório só vê os
+ * mascarados): um segredo no rótulo prova isso. A entrada 1 é inválida (pulada; as posições contam no original).
+ */
+const ASK = {
+  questions: [
+    { question: 'Qual banco usar?', header: 'Banco', multiSelect: false, options: [{ label: 'Postgres' }, { label: 'Bearer abcdef123456', description: 'o token' }] },
+    null,
+    { question: 'Quais testes rodar?', header: 'Testes', multiSelect: true, options: [{ label: 'Unidade' }, { label: 'E2E' }, { label: 'Lint' }] },
+  ],
+  metadata: { source: 'teste' },
+};
+const askJson = (over: Record<string, unknown> = {}) => hookJson({ tool_name: 'AskUserQuestion', tool_input: ASK, permission_suggestions: [], ...over });
 
 interface HookRun {
   code: number | null;
@@ -102,6 +117,34 @@ describe('permission-hook.mjs (processo)', () => {
     expect(JSON.parse(r.stdout).hookSpecificOutput.decision).toEqual({ behavior: 'deny', message: 'Recusado pelo usuário no Habblaud: use pnpm', interrupt: true });
   });
 
+  it('pergunta respondida no Habblaud: aprova com a entrada original mais `answers` (textos originais)', async () => {
+    srv = await servePermissions();
+    const run = runHook(JSON.stringify(askJson()), ['--port', String(srv.port)]);
+    const id = await pendingId(srv);
+    // O escritório só viu o rótulo mascarado.
+    expect(JSON.stringify(srv.registry!.detail(id)!.questions)).not.toContain('abcdef123456');
+    const answers = [{ question: 0, options: [1] }, { question: 2, options: [2, 0], other: 'e o build' }];
+    expect(srv.registry!.decide(id, { behavior: 'answer', answers })).toBe('ok');
+    const r = await run;
+    expect(r.code).toBe(0);
+    expect(JSON.parse(r.stdout)).toEqual({
+      hookSpecificOutput: {
+        hookEventName: 'PermissionRequest',
+        decision: {
+          behavior: 'allow',
+          updatedInput: { ...ASK, answers: { 'Qual banco usar?': 'Bearer abcdef123456', 'Quais testes rodar?': 'Unidade, Lint, e o build' } },
+        },
+      },
+    });
+  });
+
+  it('pergunta recusada no Habblaud: decisão deny (o agente segue sem a resposta)', async () => {
+    srv = await servePermissions();
+    const run = runHook(JSON.stringify(askJson()), ['--port', String(srv.port)]);
+    srv.registry!.decide(await pendingId(srv), { behavior: 'deny', message: 'decida você' });
+    expect(JSON.parse((await run).stdout).hookSpecificOutput.decision).toEqual({ behavior: 'deny', message: 'Recusado pelo usuário no Habblaud: decida você' });
+  });
+
   it('"responder no terminal": sai sem decisão (stdout vazio)', async () => {
     srv = await servePermissions();
     const run = runHook(JSON.stringify(hookJson()), ['--port', String(srv.port)]);
@@ -129,7 +172,7 @@ describe('permission-hook.mjs (processo)', () => {
     expect(srv.registry!.size).toBe(0);
   });
 
-  it('stdin inválido, outro evento ou AskUserQuestion: sai sem perguntar ao Habblaud', async () => {
+  it('stdin inválido, outro evento ou AskUserQuestion sem perguntas: sai sem decisão e sem pedido no Habblaud', async () => {
     srv = await servePermissions();
     for (const stdin of ['', 'não é json', '[]', JSON.stringify(hookJson({ hook_event_name: 'PreToolUse' })), JSON.stringify(hookJson({ tool_name: 'AskUserQuestion' }))]) {
       const r = await runHook(stdin, ['--port', String(srv.port)]);
@@ -179,5 +222,37 @@ describe('permission-hook.mjs (funções)', () => {
     expect(decisionOutput({ status: 'released', reason: 'terminal' }, hookJson())).toBeUndefined();
     expect(decisionOutput({ status: 'pending' }, hookJson())).toBeUndefined();
     expect(decisionOutput(undefined, hookJson())).toBeUndefined();
+  });
+
+  it('decisionOutput: answer troca as posições pelos textos originais; o que não dá para responder = sem decisão', () => {
+    const out = (answers: unknown, input: Record<string, unknown> = askJson()) =>
+      decisionOutput({ status: 'decided', behavior: 'answer', answers }, input) as { hookSpecificOutput: { decision: { behavior: string; updatedInput: { answers: unknown } } } } | undefined;
+    const ok = out([{ question: 2, options: [1] }, { question: 0, other: 'MySQL' }])!;
+    expect(ok.hookSpecificOutput.decision.behavior).toBe('allow');
+    expect(ok.hookSpecificOutput.decision.updatedInput).toEqual({ ...ASK, answers: { 'Quais testes rodar?': 'E2E', 'Qual banco usar?': 'MySQL' } });
+    const single = { question: 0, options: [0] };
+    for (const bad of [
+      [single], // falta a pergunta 2
+      [single, { question: 2, options: [0] }, { question: 2, options: [1] }],
+      [single, { question: 1, options: [0] }], // entrada inválida no original
+      [single, { question: 2, options: [3] }],
+      [single, { question: 2, options: [-1] }],
+      [single, { question: 2, options: ['0'] }],
+      [single, { question: 2 }],
+      [{ question: 0, options: [0, 1] }, { question: 2, options: [0] }], // escolha única com duas
+      [{ question: 0, options: [0], other: 'e mais' }, { question: 2, options: [0] }],
+      [],
+      undefined,
+    ]) {
+      expect(out(bad), JSON.stringify(bad)).toBeUndefined();
+    }
+    // Entrada sem perguntas, outra ferramenta, perguntas com o mesmo texto.
+    expect(out([single], askJson({ tool_input: {} }))).toBeUndefined();
+    expect(out([single], hookJson())).toBeUndefined();
+    const twin = { questions: [{ question: 'Igual?', options: [{ label: 'A' }] }, { question: 'Igual?', options: [{ label: 'B' }] }] };
+    expect(out([single, { question: 1, options: [0] }], askJson({ tool_input: twin }))).toBeUndefined();
+    // Aprovar sem respostas não responde a pergunta: sem decisão. Recusar vale.
+    expect(decisionOutput({ status: 'decided', behavior: 'allow' }, askJson())).toBeUndefined();
+    expect(decisionOutput({ status: 'decided', behavior: 'deny' }, askJson())).toMatchObject({ hookSpecificOutput: { decision: { behavior: 'deny' } } });
   });
 });

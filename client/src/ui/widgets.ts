@@ -1,21 +1,45 @@
-// Peças visuais reutilizadas pelos painéis: chip de conta, ponto de status, selo de papel, barra de progresso.
-import type { AccountInfo, Activity, AgentInfo, AgentStatus } from '../../../shared/types';
+// Peças visuais reutilizadas pelos painéis: chip de conta (e o selo "Codex"), ponto de status, selo de papel, barra
+// de progresso.
+import type { AccountInfo, Activity, AgentInfo, AgentStatus, Provider } from '../../../shared/types';
 import { h, setAttr, setHidden, setStyleVar, setText, setTitle, setVariant } from './dom';
 import { WORDMARK } from './icons';
 import { shellDoneKind, shellLine, shellStage, statusLabel, type ShellWait } from './model';
+import { accountChipLabel, accountProvider, fallbackShort, PROVIDER_NAME, showsProviderTag } from './provider';
 
-/** Chip quadrado com a letra curta da conta ("C", "D") na cor da conta. */
+/**
+ * Chip quadrado com a letra curta da conta ("C", "D") na cor da conta. Conta do Codex: o chip fica vazado (fundo
+ * escuro, borda e letra na cor da conta, cantos em degrau): `data-provider="codex"`.
+ */
 export function createAccountChip(size: 'sm' | 'md' | 'lg' = 'sm'): HTMLElement {
   return h('span', { class: `ui-acc-chip ui-acc-chip--${size}` });
 }
 
-export function updateAccountChip(chip: HTMLElement, account: AccountInfo | undefined, fallbackId = ''): void {
-  const short = account?.short ?? (fallbackId.replace(/^\.claude-?/, '').charAt(0).toUpperCase() || '?');
-  setText(chip, short);
+/** `provider` = dica para quando a conta não está no snapshot (ex.: a sessão do histórico diz de que ferramenta é). */
+export function updateAccountChip(chip: HTMLElement, account: AccountInfo | undefined, fallbackId = '', provider?: Provider): void {
+  const p = accountProvider(account, fallbackId, provider);
+  setText(chip, account?.short ?? fallbackShort(fallbackId, p));
   setStyleVar(chip, '--acc', account?.color ?? '#8b98b3');
-  const label = account ? `${account.name}${account.email ? ` (${account.email})` : ''}` : fallbackId || 'Conta desconhecida';
+  setAttr(chip, 'data-provider', p === 'codex' || p === 'opencode' ? p : null);
+  const label = accountChipLabel(account, fallbackId, p);
   setTitle(chip, label);
   setAttr(chip, 'aria-label', label);
+}
+
+/** Selo de texto "Codex" ao lado do nome da conta (onde há espaço: gaveta, terminal, cartão de uso, dica). */
+export function createProviderTag(extra = ''): HTMLElement {
+  return h('span', { class: `ui-prov${extra ? ` ${extra}` : ''}`, text: 'Codex', hidden: true, title: 'Agente do Codex (OpenAI)' });
+}
+
+/** Mostra o selo só para o Codex (e não repete quando o nome da conta já diz "Codex"). */
+export function updateProviderTag(tag: HTMLElement, provider: Provider, accountName = ''): void {
+  if (provider === 'opencode') {
+    setText(tag, PROVIDER_NAME.opencode);
+    setTitle(tag, 'Agente do OpenCode');
+  } else if (provider === 'codex') {
+    setText(tag, PROVIDER_NAME.codex);
+    setTitle(tag, 'Agente do Codex (OpenAI)');
+  }
+  setHidden(tag, !showsProviderTag(provider, accountName));
 }
 
 /** Quadradinho de status (pixel), com pulso quando precisa de você. */

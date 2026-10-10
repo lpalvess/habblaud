@@ -1,4 +1,4 @@
-// Terminal somente leitura dos agentes de demonstração: uma conversa fictícia e determinística montada
+// Terminal dos agentes de demonstração: uma conversa fictícia e determinística montada
 // a partir do título e das atividades do agente simulado (nenhum dado real). Código puro.
 //
 // Cada atividade vira uma ou mais entradas com ids derivados do id da atividade: quando o servidor
@@ -6,9 +6,15 @@
 // O conteúdo inventado (pensamentos, saídas de comandos, trechos de código) sai de um hash do id e só
 // depende da própria atividade e de dados fixos do agente: o histórico desliza (guarda só as últimas
 // atividades) sem mudar o que já foi mostrado.
+//
+// Agentes do Codex ganham a conversa no jeito do Codex: comandos no shell (inclusive para ler e buscar: sed, rg),
+// edições por apply_patch (o patch inteiro, com a resposta "Success. Updated the following files"), update_plan,
+// web_search e spawn_agent.
 import type { Activity, AgentInfo, TerminalEntry } from '../types';
 import { SHELL_DONE_TOOL, SHELL_WAIT_TOOL } from '../activity';
 import { hash32 } from '../hash';
+import { MESSAGE_TOOL } from '../messages';
+import { demoPatchText } from './permission';
 
 type ToolEntry = Extract<TerminalEntry, { kind: 'tool' }>;
 
@@ -20,6 +26,8 @@ interface Ctx {
   project: string;
   /** Arquivos genéricos do projeto (buscas, git status), na linguagem que o nome do projeto sugere. */
   pool: readonly string[];
+  /** Agente do Codex: ferramentas e saídas no jeito dele. */
+  codex: boolean;
 }
 
 const POOLS: Record<'ts' | 'py' | 'astro', readonly string[]> = {
@@ -197,11 +205,22 @@ function isBackground(i: number, ctx: Ctx): boolean {
   return false;
 }
 
-function shellCall(out: TerminalEntry[], a: Activity, i: number, command: string, seed: number, ctx: Ctx): void {
+function shellCall(out: TerminalEntry[], a: Activity, i: number, command: string, seed: number, ctx: Ctx, output?: string): void {
   const bg = isBackground(i, ctx);
-  const result = bg ? `Comando rodando em segundo plano (id b${hex(seed)}). Você recebe um aviso quando ele terminar.` : commandOutput(command, seed, ctx);
+  const result = bg
+    ? ctx.codex
+      ? `Comando rodando em segundo plano (sessão ${num(seed, 1000, 9999)}).`
+      : `Comando rodando em segundo plano (id b${hex(seed)}). Você recebe um aviso quando ele terminar.`
+    : (output ?? commandOutput(command, seed, ctx));
   const firstLine = command.split('\n')[0];
-  call(out, a, 'Bash', `Bash(${firstLine}${command.includes('\n') ? ' …' : ''})`, result, { input: command, inputKind: 'command' });
+  const tool = ctx.codex ? 'Shell' : 'Bash';
+  call(out, a, tool, `${tool}(${firstLine}${command.includes('\n') ? ' …' : ''})`, result, { input: command, inputKind: 'command' });
+}
+
+/** Codex: edição por apply_patch (o patch é o que se aprova) e a resposta dele. */
+function patchCall(out: TerminalEntry[], a: Activity, file: string, lines: readonly string[], add: boolean): void {
+  const result = `Success. Updated the following files:\n${add ? 'A' : 'M'} ${file}`;
+  call(out, a, 'apply_patch', `apply_patch(${file})`, result, { input: demoPatchText(file, lines, add), inputKind: 'diff' });
 }
 
 function entriesFor(a: Activity, i: number, ctx: Ctx, out: TerminalEntry[]): void {
@@ -227,6 +246,11 @@ function entriesFor(a: Activity, i: number, ctx: Ctx, out: TerminalEntry[]): voi
     out.push({ kind: 'assistant', id: `${a.id}:a`, at: a.at, text: `Deixei rodando em segundo plano: ${what}. Volto assim que terminar.` });
     return;
   }
+  // Mensagem mandada pelo escritório: entra na conversa como um prompt seu.
+  if (a.tool === MESSAGE_TOOL) {
+    out.push({ kind: 'user', id: `${a.id}:u`, at: a.at, text: detail ?? a.text });
+    return;
+  }
   switch (a.kind) {
     case 'prompt':
       out.push({ kind: 'user', id: `${a.id}:u`, at: a.at, text: detail ?? quoted(a.text) ?? a.text });
@@ -243,21 +267,24 @@ function entriesFor(a: Activity, i: number, ctx: Ctx, out: TerminalEntry[]): voi
       if (!detail?.startsWith('/')) break;
       const file = rel(detail, ctx);
       const lines = snippet(file);
-      call(out, a, 'Read', `Read(${file})`, lines.map((l, n) => `${String(n + 1).padStart(6)}\t${l}`).join('\n'));
+      if (ctx.codex) shellCall(out, a, i, `sed -n '1,${lines.length + 40}p' ${file}`, seed, ctx, lines.join('\n'));
+      else call(out, a, 'Read', `Read(${file})`, lines.map((l, n) => `${String(n + 1).padStart(6)}\t${l}`).join('\n'));
       return;
     }
     case 'edit': {
       if (!detail?.startsWith('/')) break;
       const file = rel(detail, ctx);
       const [before, after] = editPair(file, seed);
-      const diff = [...before.split('\n').map((l) => `- ${l}`), ...after.split('\n').map((l) => `+ ${l}`)].join('\n');
-      call(out, a, 'Edit', `Edit(${file})`, `Arquivo atualizado: ${file}`, { input: diff, inputKind: 'diff' });
+      const lines = [...before.split('\n').map((l) => `- ${l}`), ...after.split('\n').map((l) => `+ ${l}`)];
+      if (ctx.codex) patchCall(out, a, file, lines, false);
+      else call(out, a, 'Edit', `Edit(${file})`, `Arquivo atualizado: ${file}`, { input: lines.join('\n'), inputKind: 'diff' });
       return;
     }
     case 'write': {
       if (!detail?.startsWith('/')) break;
       const file = rel(detail, ctx);
       const lines = snippet(file);
+      if (ctx.codex) return patchCall(out, a, file, lines, true);
       call(out, a, 'Write', `Write(${file})`, `Arquivo criado: ${file} (${lines.length} linhas)`, { input: lines.map((l) => `+ ${l}`).join('\n'), inputKind: 'diff' });
       return;
     }
@@ -268,12 +295,14 @@ function entriesFor(a: Activity, i: number, ctx: Ctx, out: TerminalEntry[]): voi
         const ext = /\*\.(\w+)$/.exec(pattern)?.[1];
         const known = ctx.pool.filter((f) => !ext || f.endsWith(`.${ext}`));
         const found = known.length ? known : [`src/index.${ext}`, `src/app.${ext}`];
-        call(out, a, 'Glob', `Glob(${pattern})`, found.join('\n'));
+        if (ctx.codex) shellCall(out, a, i, `rg --files -g '${pattern}'`, seed, ctx, found.join('\n'));
+        else call(out, a, 'Glob', `Glob(${pattern})`, found.join('\n'));
         return;
       }
       const files = pickFiles(ctx.pool, seed, 1 + (seed % 3));
       const matches = files.map((f, k) => `${f}:${num(hash32(`${a.id}:${k}`), 3, 180)}:  ${/^\w+$/.test(pattern) ? `const resultado = ${pattern}(dados);` : pattern}`);
-      call(out, a, 'Grep', `Grep(${pattern})`, matches.join('\n'), { input: '{\n  "output_mode": "content"\n}', inputKind: 'json' });
+      if (ctx.codex) shellCall(out, a, i, `rg -n ${JSON.stringify(pattern)}`, seed, ctx, matches.join('\n'));
+      else call(out, a, 'Grep', `Grep(${pattern})`, matches.join('\n'), { input: '{\n  "output_mode": "content"\n}', inputKind: 'json' });
       return;
     }
     case 'run':
@@ -293,7 +322,12 @@ function entriesFor(a: Activity, i: number, ctx: Ctx, out: TerminalEntry[]): voi
           .replace(/^-|-$/g, '');
         const results = [`${detail} — guia completo`, `Documentação oficial: ${detail}`, `Discussão no fórum: ${detail}`];
         const urls = [`https://blog.example.com/${slug}`, `https://docs.example.com/${slug}`, `https://forum.example.com/t/${slug}`];
-        call(out, a, 'WebSearch', `WebSearch(${detail})`, results.map((r, k) => `${k + 1}. ${r}\n   ${urls[k]}`).join('\n'));
+        const tool = ctx.codex ? 'web_search' : 'WebSearch';
+        call(out, a, tool, `${tool}(${detail})`, results.map((r, k) => `${k + 1}. ${r}\n   ${urls[k]}`).join('\n'));
+        return;
+      }
+      if (/^https?:\/\//.test(detail) && ctx.codex) {
+        shellCall(out, a, i, `curl -sL ${detail} | head -n 40`, seed, ctx, '<!doctype html>\n<title>Fetch API</title>\n…');
         return;
       }
       if (/^https?:\/\//.test(detail)) {
@@ -309,13 +343,15 @@ function entriesFor(a: Activity, i: number, ctx: Ctx, out: TerminalEntry[]): voi
     case 'plan': {
       const [done = 0, total = ctx.agent.tasks.length] = (/(\d+)\/(\d+)/.exec(detail ?? '') ?? []).slice(1).map(Number);
       const list = ctx.agent.tasks.slice(0, total || undefined).map((t, k) => `${k < done ? '☒' : k === done ? '◐' : '☐'} ${t.title}`);
-      call(out, a, 'TodoWrite', total ? `TodoWrite(${done}/${total} concluídas)` : 'TodoWrite', 'Lista de tarefas atualizada', list.length ? { input: list.join('\n'), inputKind: 'text' } : undefined);
+      const tool = ctx.codex ? 'update_plan' : 'TodoWrite';
+      call(out, a, tool, total ? `${tool}(${done}/${total} concluídas)` : tool, ctx.codex ? 'Plan updated' : 'Lista de tarefas atualizada', list.length ? { input: list.join('\n'), inputKind: 'text' } : undefined);
       return;
     }
     case 'delegate': {
       const desc = afterColon(a.text);
-      const type = detail?.split(' — ')[0];
-      call(out, a, 'Agent', `Agent(${type ? `${type}: ` : ''}${desc})`, 'Subagentes trabalhando em paralelo; os resultados chegam quando terminarem.', {
+      const type = ctx.codex ? 'worker' : detail?.split(' — ')[0];
+      const tool = ctx.codex ? 'spawn_agent' : 'Agent';
+      call(out, a, tool, `${tool}(${type ? `${type}: ` : ''}${desc})`, 'Subagentes trabalhando em paralelo; os resultados chegam quando terminarem.', {
         input: `${desc}. Investigue o código de ${ctx.project} e devolva um resumo curto com os arquivos envolvidos.`,
         inputKind: 'text',
       });
@@ -376,7 +412,7 @@ export function demoTerminalEntries(agent: AgentInfo, history: Activity[]): Term
   const slash = agent.roomId.indexOf('/');
   const root = slash >= 0 ? agent.roomId.slice(slash).replace(/\/+$/, '') : '';
   const project = root.replace(/^.*\//, '') || 'projeto';
-  const ctx: Ctx = { agent, history, root, project, pool: poolFor(project) };
+  const ctx: Ctx = { agent, history, root, project, pool: poolFor(project), codex: agent.provider === 'codex' };
   const out: TerminalEntry[] = [];
   // Sem nenhuma atividade ainda, o título (a tarefa) abre a conversa. Depois disso, os prompts vêm das
   // próprias atividades: um id ligado ao histórico mudaria quando ele desliza e reapareceria no fim.

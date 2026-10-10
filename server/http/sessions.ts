@@ -1,21 +1,23 @@
-// Histórico do terminal somente leitura (rotas /api/sessions/*):
+// Histórico do terminal (rotas /api/sessions/*):
 //   GET /api/sessions/recent                       -> RecentSessionsResponse (sessões dos últimos 7 dias)
 //   GET /api/sessions/:conta/:sessionId/terminal   -> SSE com o mesmo protocolo do terminal do agente
 // Mesma trava do terminal (ServerConfig.terminal + Host local), porque expõem títulos e conversas. A conta
 // precisa ser uma das conhecidas, o id precisa ter formato de UUID e o transcript precisa ficar dentro da
-// pasta projects/ da conta (sources/history.ts): nada de path traversal.
+// pasta da conta (cada ferramenta valida o seu: sources/history.ts para o Claude Code): nada de path traversal.
+// Quem lista e resolve é o HistorySet (sources/source.ts), que junta o histórico de todas as ferramentas.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { RecentSessionsResponse } from '../../shared/types';
 import { errMsg, log } from '../log';
-import { HISTORY_DAYS, HISTORY_LIMIT, type SessionHistory } from '../sources/history';
+import { HISTORY_DAYS, HISTORY_LIMIT } from '../sources/history';
+import type { SessionLookup } from '../sources/source';
 import { sendJson } from './app';
 import { isLoopbackHost } from './guard';
 import type { TerminalStreams } from './terminal';
 
 export interface SessionRoutesDeps {
   /** Ausente = recurso desligado (sem bind local). */
-  history?: SessionHistory;
-  /** Ausente = terminal somente leitura desligado. */
+  history?: SessionLookup;
+  /** Ausente = terminal desligado. */
   terminals?: TerminalStreams;
 }
 
@@ -25,8 +27,8 @@ const TERMINAL_ROUTE = /^\/api\/sessions\/([^/]+)\/([^/]+)\/terminal$/;
 
 /** Por que a trava recusa a requisição (undefined = liberada): os mesmos textos do terminal do agente. */
 export function sessionsLockError(enabled: boolean, host: string | undefined): string | undefined {
-  if (!enabled) return 'terminal somente leitura desligado: ele só funciona com o Habblaud acessível apenas pelo próprio computador';
-  if (!isLoopbackHost(host)) return 'o terminal somente leitura só abre pelo próprio computador (http://localhost ou http://127.0.0.1)';
+  if (!enabled) return 'terminal desligado: ele só funciona com o Habblaud acessível apenas pelo próprio computador';
+  if (!isLoopbackHost(host)) return 'o terminal só abre pelo próprio computador (http://localhost ou http://127.0.0.1)';
   return undefined;
 }
 
@@ -71,5 +73,5 @@ export function handleSessionsRoute(req: IncomingMessage, res: ServerResponse, p
   if (account === undefined || sessionId === undefined) return sendJson(res, 400, { error: 'endereço inválido' });
   const found = history.resolve(account, sessionId);
   if ('error' in found) return sendJson(res, found.status, { error: found.error });
-  terminals.attachSession(req, res, `session:${account}:${sessionId}`, found.path);
+  terminals.attachSession(req, res, `session:${account}:${sessionId}`, found.path, found.createParser);
 }

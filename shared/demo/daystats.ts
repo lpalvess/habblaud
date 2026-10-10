@@ -2,6 +2,7 @@
 // demo e o navegador no ?mock=1. Preenche de ontem (desde a meia-noite) até agora com dias de trabalho plausíveis
 // (manhã e tarde movimentadas, almoço mais calmo, noite quase parada) nos projetos e contas do próprio demo, para o
 // painel ter o que mostrar assim que o demo liga. Determinístico pela semente; nada aqui vem de dados reais.
+// Salas da conta do Codex só somam tokens (o Codex não grava custo).
 import { addDays, dayKeyOf, dayStart, HOUR_MS, hourStart, localHourOf, type AgentRef, type StatsBook, type StatsView, type TimedStatus } from '../daystats';
 import { hash32, mulberry32 } from '../hash';
 import { pickName } from '../names';
@@ -17,6 +18,8 @@ interface FakeRoom {
   name: string;
   account: string;
   accountMeta?: { name: string; short: string; color: string };
+  /** Sala da conta do Codex: tokens, sem custo. */
+  codex: boolean;
   /** Peso do movimento da sala e o quanto ela costuma esperar por você. */
   weight: number;
   waitiness: number;
@@ -31,7 +34,11 @@ interface FakeRoom {
 export function seedDemoHistory(book: StatsBook, view: StatsView, now: number, tz: string, seed = hash32(`meu-dia:${hourStart(now)}`)): void {
   const rng = mulberry32(seed);
   const between = (a: number, b: number) => a + rng() * (b - a);
-  const accounts = view.accounts.map((a) => ({ id: a.id, meta: { name: a.name, short: a.short, color: a.color } }));
+  const accounts = view.accounts.map((a) => ({ id: a.id, codex: 'provider' in a && a.provider === 'codex', meta: { name: a.name, short: a.short, color: a.color } }));
+  // Os outros projetos: metade na primeira conta do Claude Code, 30% na última e 20% na do Codex (quando há).
+  const claude = accounts.filter((a) => !a.codex);
+  const codex = accounts.find((a) => a.codex);
+  const accountFor = (r: number) => (codex && claude.length ? (r < 0.5 ? claude[0] : r < 0.8 ? claude[claude.length - 1] : codex) : accounts[r < 0.6 ? 0 : accounts.length - 1]);
   const roomNames = new Map(view.rooms.map((r) => [r.id, r.name]));
   const usedNames = new Set(view.agents.map((a) => a.name));
 
@@ -45,10 +52,16 @@ export function seedDemoHistory(book: StatsBook, view: StatsView, now: number, t
   const first = [...byRoom.keys()][0];
   if (!first || !accounts.length) return;
   const base = first.slice(0, first.lastIndexOf('/'));
+  const extra: string[] = [];
   for (const name of DEMO_PROJECT_NAMES) {
     const id = `${base}/${name}`;
-    if (!byRoom.has(id)) byRoom.set(id, new Map([[accounts[rng() < 0.6 ? 0 : accounts.length - 1].id, 1]]));
+    if (byRoom.has(id)) continue;
+    byRoom.set(id, new Map([[accountFor(rng()).id, 1]]));
+    extra.push(id);
   }
+  // O Codex sempre tem algum projeto no histórico (o painel mostra os tokens dele, sem custo).
+  const extraCodex = extra.some((id) => byRoom.get(id)!.has(codex?.id ?? ''));
+  if (codex && extra.length && !extraCodex) byRoom.set(extra[extra.length - 1], new Map([[codex.id, 1]]));
   const rooms: FakeRoom[] = [...byRoom].map(([id, accs]) => {
     const account = [...accs].sort((x, y) => y[1] - x[1])[0]?.[0] ?? accounts[0].id;
     const people = [0, 1, 2].map((k) => {
@@ -60,6 +73,7 @@ export function seedDemoHistory(book: StatsBook, view: StatsView, now: number, t
       id,
       name: roomNames.get(id) ?? id.split('/').pop() ?? id,
       account,
+      codex: !!accounts.find((a) => a.id === account)?.codex,
       weight: between(0.35, 1.1),
       waitiness: between(0.05, 0.3),
       people,
@@ -112,7 +126,7 @@ export function seedDemoHistory(book: StatsBook, view: StatsView, now: number, t
       const tokensOut = Math.round(workMin * between(1_000, 2_200));
       book.addCount(r0, 'tokensIn', tokensIn, at);
       book.addCount(r0, 'tokensOut', tokensOut, at);
-      book.addCount(r0, 'costUSD', Math.round((tokensIn * 0.3e-6 + tokensOut * 15e-6) * 10_000) / 10_000, at);
+      if (!room.codex) book.addCount(r0, 'costUSD', Math.round((tokensIn * 0.3e-6 + tokensOut * 15e-6) * 10_000) / 10_000, at);
 
       // As esperas da hora viram 1 a 3 episódios de quem estava na sala.
       if (waiting >= 30_000) {
@@ -123,6 +137,8 @@ export function seedDemoHistory(book: StatsBook, view: StatsView, now: number, t
           left -= dur;
           const start = hs + rng() * Math.max(0, span - dur);
           const who = room.people[Math.floor(rng() * room.people.length)];
+          // O Codex só espera para aprovar (o sorteio acontece igual, para não mudar o resto).
+          const reason = REASONS[Math.floor(rng() * REASONS.length)];
           book.addWait({
             agentId: `demo-dia:${ri}:${who}`,
             agentName: who,
@@ -130,7 +146,7 @@ export function seedDemoHistory(book: StatsBook, view: StatsView, now: number, t
             account: room.account,
             start: Math.round(start),
             end: Math.round(start + dur),
-            reason: REASONS[Math.floor(rng() * REASONS.length)],
+            reason: room.codex ? 'aprovar um comando' : reason,
           });
         }
         wall += waiting * between(0.75, 0.95);
