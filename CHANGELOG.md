@@ -30,6 +30,12 @@ do meio (0.**3**.0).
   (uma opção, várias ou texto livre) ou recusar pelo escritório, esperando até 10 minutos; sem resposta aqui, vale o
   prompt do OpenCode, e responder lá também faz o cartão sumir. Reinicie o OpenCode depois de atualizar o plugin
   (`npm run opencode:install`). Coberto por testes automáticos.
+- **Ajuda do app com uma seção do OpenCode**, ao lado da do Codex: o que aparece, o plugin opcional
+  (`npm run opencode:install` e reiniciar o OpenCode), aprovar, perguntas, mensagens e quais tabelas são lidas.
+- **Solução de problemas do OpenCode no README:** Node 22.13, pasta de dados, plugin que ficou para trás, porta do
+  `opencode:status`, página aberta e como depurar com `HABBLAUD_HOOK_DEBUG=1`.
+- **Docker e OpenCode:** a leitura do banco do OpenCode não funciona no Docker (o `docker:up` não monta nenhum SQLite);
+  para ver o OpenCode, rode o Habblaud sem Docker.
 
 ## [0.8.0] - 2026-10-09
 

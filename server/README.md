@@ -393,6 +393,11 @@ Terceira fonte, ao lado das do Claude Code e do Codex (`sources/opencode/`); age
   trava das mensagens. `canMessage` = o plugin buscou aquela sessão há até 15 s. O plugin entrega com
   `client.session.promptAsync({path: {id}, body: {parts: [{type: 'text', text}]}})`. `queued` sem busca em 60 s ou
   `sent` sem confirmação em 20 s = `failed`.
+- **Docker:** `scripts/docker-up.ts` não monta nenhum SQLite (`server/test/docker-up.test.ts` confere), então a camada
+  de disco do OpenCode só funciona no modo Node; o plugin, que fala por HTTP, não depende disso.
+- **Depuração:** `HABBLAUD_HOOK_DEBUG=1` no OpenCode faz o plugin escrever no stderr linhas `[habblaud-opencode]`, entre
+  elas a resposta do registro de permissão (`skip`: `no-viewers`, `unknown-session`, `unsupported-tool`, `too-many`).
+  A ajuda do app (`client/src/ui/help.ts`, seção `opencode`) e o README (solução de problemas) descrevem o mesmo.
 
 ## Variáveis de ambiente
 

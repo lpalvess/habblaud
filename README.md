@@ -5,7 +5,7 @@
 <h1 align="center">Habblaud</h1>
 
 <p align="center">
-  <b>O escritório virtual dos seus agentes do Claude Code (e do Codex).</b><br />
+  <b>O escritório virtual dos seus agentes do Claude Code (e do Codex e do OpenCode).</b><br />
   Cada projeto vira uma sala, cada agente vira um personagem em pixel art que mostra, em tempo real, o que está fazendo.
 </p>
 
@@ -229,7 +229,8 @@ Se você também usa o **OpenCode**, as sessões dele entram no mesmo escritóri
 um personagem com o selo **OpenCode**. O Habblaud acha o banco do OpenCode (`~/.local/share/opencode/opencode.db`) e o
 lê **só para leitura**, sem instalar nada. Isso pede o **Node 22.13 ou mais novo** (é quando o `node:sqlite` passa a
 funcionar sem opção extra): no Node 22.12 essa leitura fica desligada, o Habblaud avisa com uma linha no log e o resto
-segue normal. Para ver o OpenCode **ao vivo**, aprovar pedidos de permissão e mandar mensagens pelo escritório, instale
+segue normal. **No Docker essa leitura não existe:** o container não enxerga o banco do OpenCode (o `docker:up` de propósito
+não monta nenhum arquivo SQLite). Para ver o OpenCode, rode o Habblaud sem Docker (modo Node). Para ver o OpenCode **ao vivo**, aprovar pedidos de permissão e mandar mensagens pelo escritório, instale
 o plugin:
 
 ```bash
@@ -525,7 +526,8 @@ permissão real foi aprovado e recusado pelo escritório. "Sempre permitir" e in
   foi mexida nos últimos 30 minutos e não está arquivada; uma sessão filha (`parent_id`) vira subagente da principal.
   Trabalhando ou ociosa vem da última resposta do assistente, e a atividade vem da última ferramenta usada (bash, read,
   edit, write, grep, glob, webfetch, task). Pede o Node 22.13 ou mais novo; sem o banco, ou no Node 22.12, a leitura
-  simplesmente não liga. O banco não é montado no Docker, então essa leitura só funciona com o Habblaud no modo Node.
+  simplesmente não liga. O banco não é montado no Docker (o `docker:up` não monta nenhum SQLite), então essa leitura só
+  funciona com o Habblaud no modo Node.
 - **Com o plugin** (`npm run opencode:install` e reabrir o OpenCode), o OpenCode avisa o Habblaud na hora do que
   acontece (status, tarefas, ferramentas, pedidos de permissão), sem esperar a próxima leitura do banco.
   O plugin é carregado quando o OpenCode inicia, então é preciso reiniciar o OpenCode depois de `npm run opencode:install`.
