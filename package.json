@@ -1,6 +1,6 @@
 {
   "name": "habblaud",
-  "version": "0.4.0",
+  "version": "0.10.0",
   "private": true,
   "description": "Escritório virtual animado que mostra, em tempo real, o que seus agentes do Claude Code estão fazendo.",
   "license": "MIT",
@@ -24,6 +24,7 @@
     "start": "node dist/server/index.js",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p server/tsconfig.json",
     "test": "vitest run",
+    "i18n:check": "tsx scripts/i18n-check.ts",
     "docker:up": "tsx scripts/docker-up.ts",
     "docker:down": "tsx scripts/docker-up.ts --down",
     "docker:logs": "docker compose logs -f habblaud",
@@ -36,16 +37,29 @@
     "mod:install": "tsx scripts/mod-install.ts install",
     "mod:uninstall": "tsx scripts/mod-install.ts uninstall",
     "mod:status": "tsx scripts/mod-install.ts status",
+    "codex:install": "tsx scripts/codex-install.ts install",
+    "codex:uninstall": "tsx scripts/codex-install.ts uninstall",
+    "codex:status": "tsx scripts/codex-install.ts status",
+    "codex:bridge": "tsx scripts/codex-bridge.ts",
+    "remote:setup": "tsx scripts/remote-setup.ts",
+    "remote:mdns": "tsx scripts/remote-mdns.ts",
     "release": "tsx scripts/release.ts"
   },
   "devDependencies": {
     "@fontsource/pixelify-sans": "^5.3.0",
     "@types/node": "^22.20.5",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "esbuild": "^0.28.2",
-    "playwright-core": "^1.63.0",
+    "playwright-core": "^1.64.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vite": "^8.3.3",
+    "vite": "^8.3.4",
     "vitest": "^5.0.3"
+  },
+  "optionalDependencies": {
+    "@xterm/addon-serialize": "^0.14.0",
+    "@xterm/headless": "^6.0.0",
+    "node-pty": "^1.1.0"
   }
 }

@@ -7,6 +7,8 @@ const r = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 // `npm run dev:client` sobe só o Vite (use ?mock=1 para dados simulados no navegador).
 export default defineConfig({
   root: r('./client'),
+  // No navegador vai só o dicionário do idioma ativo (client/src/main.ts), não os três: ver shared/locales/all.ts.
+  resolve: { alias: [{ find: /^\.\/locales\/all$/, replacement: r('./shared/locales/none.ts') }] },
   publicDir: r('./client/public'),
   build: {
     outDir: r('./dist/client'),

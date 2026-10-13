@@ -6,7 +6,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { discoverClaudeDirs } from './accounts/detect';
 import { parseAllowedHosts } from './http/guard';
+import { parseRemoteConfig, type RemoteConfig } from './http/remote';
 import { parseGithubRepo } from './updates/checker';
+import { tr } from '../shared/i18n';
 
 export interface ServerConfig {
   port: number;
@@ -30,10 +32,15 @@ export interface ServerConfig {
   /** Nomes extras aceitos no cabeçalho Host/Origin (HABBLAUD_ALLOWED_HOSTS); localhost e IPs sempre valem. */
   allowedHosts: Set<string>;
   /**
-   * Terminal somente leitura (GET /api/agents/:id/terminal) ligado: só com bind local, isto é, com o
-   * Habblaud acessível apenas pelo próprio computador (ver terminalOffReason).
+   * Terminal (GET /api/agents/:id/terminal) ligado: só com bind local, isto é, com o Habblaud acessível apenas
+   * pelo próprio computador (ver terminalOffReason). É a trava de tudo o que mostra ou age sobre as sessões.
    */
   terminal: boolean;
+  /**
+   * Mensagens pelo escritório (POST /api/messages e a caixa de entrada do plugin habblaud-mensagens) ligadas: a
+   * trava do terminal e HABBLAUD_MENSAGENS sem desligar (ver messagesOffReason).
+   */
+  messages: boolean;
   /** Grava a linha do tempo do escritório para o timelapse (<dataDir>/timeline); HABBLAUD_TIMELINE=0 desliga. */
   timeline: boolean;
   /** Raiz do projeto (onde fica o package.json); serve dist/client a partir daqui. */
@@ -43,6 +50,16 @@ export interface ServerConfig {
   repo?: string;
   /** Consulta o GitHub atrás de versão nova (server/updates/checker.ts); HABBLAUD_UPDATE_CHECK=0 desliga. */
   updateCheck: boolean;
+  /** Observa as sessões do Codex (sources/codex/); HABBLAUD_CODEX=0 desliga. */
+  codex: boolean;
+  /** Segunda porta, com login, para o celular na rede local (http/remote.ts); ausente = desligada. */
+  remote?: RemoteConfig;
+  /** Por que o acesso remoto ficou desligado quando as variáveis estão incompletas. */
+  remoteWarning?: string;
+  /** Observa as sessões do OpenCode (sources/opencode/); HABBLAUD_OPENCODE=0 desliga. */
+  opencode: boolean;
+  /** Pasta de dados do OpenCode (onde fica o opencode.db): HABBLAUD_OPENCODE_DIR, $XDG_DATA_HOME/opencode ou ~/.local/share/opencode. */
+  opencodeDir: string;
 }
 
 export function isTruthy(v: string | undefined): boolean {
@@ -104,8 +121,8 @@ export function isLoopbackBind(value: string | undefined): boolean {
 }
 
 /**
- * Por que o terminal somente leitura fica desligado (undefined = ligado). Os transcripts têm a conversa
- * inteira, então ele só liga quando o Habblaud não fica exposto além do próprio computador:
+ * Por que o terminal fica desligado (undefined = ligado). Os transcripts têm a conversa inteira, então ele
+ * só liga quando o Habblaud não fica exposto além do próprio computador:
  * - Node: o HABBLAUD_HOST precisa ser loopback;
  * - Docker: o processo sempre escuta em 0.0.0.0 dentro do container e quem decide a exposição é a porta
  *   publicada no host, HABBLAUD_BIND (o docker-compose.yml repassa o mesmo valor ao container). Ausente
@@ -118,10 +135,31 @@ export function terminalOffReason(env: NodeJS.ProcessEnv, host: string, inDocker
   if (flag && !isTruthy(flag)) return `HABBLAUD_TERMINAL=${flag}`;
   if (inDocker) {
     const bind = env.HABBLAUD_BIND?.trim();
-    if (!bind) return 'HABBLAUD_BIND não chegou ao container, então a porta pode estar exposta na rede';
-    return isLoopbackBind(bind) ? undefined : `a porta está exposta na rede: HABBLAUD_BIND=${bind}`;
+    if (!bind) return tr('HABBLAUD_BIND não chegou ao container, então a porta pode estar exposta na rede');
+    return isLoopbackBind(bind) ? undefined : tr('a porta está exposta na rede: HABBLAUD_BIND={0}', [bind]);
   }
-  return isLoopbackBind(host) ? undefined : `a porta está exposta na rede: HABBLAUD_HOST=${host}`;
+  return isLoopbackBind(host) ? undefined : tr('a porta está exposta na rede: HABBLAUD_HOST={0}', [host]);
+}
+
+/**
+ * Por que as mensagens pelo escritório ficam desligadas (undefined = ligadas). Elas entram na sessão como se você
+ * as tivesse digitado, então seguem a trava do terminal; HABBLAUD_MENSAGENS com qualquer valor que não seja
+ * "ligado" (0, false, off, no...) desliga só elas.
+ */
+export function messagesOffReason(env: NodeJS.ProcessEnv, host: string, inDocker: boolean): string | undefined {
+  const flag = env.HABBLAUD_MENSAGENS?.trim();
+  if (flag && !isTruthy(flag)) return `HABBLAUD_MENSAGENS=${flag}`;
+  const terminal = terminalOffReason(env, host, inDocker);
+  return terminal ? tr('mesma trava do terminal: {0}', [terminal]) : undefined;
+}
+
+/** Pasta de dados do OpenCode: HABBLAUD_OPENCODE_DIR, senão $XDG_DATA_HOME/opencode, senão ~/.local/share/opencode. */
+export function opencodeDataDir(env: NodeJS.ProcessEnv, home: string): string {
+  const own = env.HABBLAUD_OPENCODE_DIR?.trim();
+  if (own) return resolve(own);
+  const xdg = env.XDG_DATA_HOME?.trim();
+  if (xdg) return resolve(xdg, 'opencode');
+  return join(home, '.local', 'share', 'opencode');
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] = process.argv): ServerConfig {
@@ -131,6 +169,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] 
   const rootDir = findRoot(dirname(fileURLToPath(import.meta.url)));
   const host = env.HABBLAUD_HOST?.trim() || '127.0.0.1';
   const pkg = readPackage(rootDir);
+  const remote = parseRemoteConfig(env, inDocker);
   return {
     port: Number.isFinite(port) && port > 0 && port < 65536 ? port : 4747,
     host,
@@ -143,10 +182,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: string[] 
     usageDir: resolve(env.HABBLAUD_USAGE_DIR?.trim() || join(home, '.habblaud', 'usage')),
     allowedHosts: parseAllowedHosts(env.HABBLAUD_ALLOWED_HOSTS),
     terminal: terminalOffReason(env, host, inDocker) === undefined,
+    messages: messagesOffReason(env, host, inDocker) === undefined,
     timeline: !env.HABBLAUD_TIMELINE?.trim() || isTruthy(env.HABBLAUD_TIMELINE),
     rootDir,
     version: pkg.version,
     repo: pkg.repo,
     updateCheck: !env.HABBLAUD_UPDATE_CHECK?.trim() || isTruthy(env.HABBLAUD_UPDATE_CHECK),
+    codex: !env.HABBLAUD_CODEX?.trim() || isTruthy(env.HABBLAUD_CODEX),
+    remote: remote.config,
+    remoteWarning: remote.warning,
+    opencode: !env.HABBLAUD_OPENCODE?.trim() || isTruthy(env.HABBLAUD_OPENCODE),
+    opencodeDir: opencodeDataDir(env, home),
   };
 }

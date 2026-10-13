@@ -8,6 +8,7 @@ import { describePrompt, describeShellJob, describeTool, maskSecrets, SPECIAL, t
 import type { GitHubEvent } from '../../shared/github';
 import { detectGitHubNotification, detectGitHubResult, githubCallOf, type GitHubCall } from './github';
 import type { ShellStart } from './shells';
+import { LineBuffer, warnOversizedLine } from './tail';
 
 // ------------------------------------------------------------------ tarefas
 
@@ -112,7 +113,6 @@ export interface TranscriptState {
   aiTitle?: string;
   lastPrompt?: string;
   tasks: TaskItem[];
-  taskSeq: number;
   /** TaskCreate aguardando o id real (tool_use id -> id provisório). */
   pendingTaskCreates: Map<string, string>;
   /** Operações de tarefas feitas desde o início da janela lida (até o prefixo do arquivo ser mesclado). */
@@ -158,7 +158,6 @@ export interface TranscriptState {
 export function createTranscriptState(opts: { trackPrefix?: boolean } = {}): TranscriptState {
   return {
     tasks: [],
-    taskSeq: 0,
     pendingTaskCreates: new Map(),
     taskOpsLog: opts.trackPrefix ? [] : null,
     sawTaskReplace: false,
@@ -485,7 +484,7 @@ class LineParser {
       case 'TaskCreate': {
         const title = str(input.subject) ?? str(input.description);
         if (!title) break;
-        const tid = String(++s.taskSeq);
+        const tid = `pending:${id}`;
         remember(s.pendingTaskCreates, id, tid, 64);
         const af = str(input.activeForm);
         this.taskOp(af ? { op: 'create', id: tid, title: truncate(title, 120), activeForm: truncate(af, 120) } : { op: 'create', id: tid, title: truncate(title, 120) });
@@ -802,19 +801,23 @@ export async function scanPrefix(
       if (activities.length > keep * 2) activities = activities.slice(-keep);
     }
   };
-  let partial: Buffer | null = null;
+  const pending = new LineBuffer();
+  let discarded = 0;
   const stream = createReadStream(path, { start: 0, end: end - 1, highWaterMark: 1024 * 1024 });
   for await (const chunk of stream as AsyncIterable<Buffer>) {
-    const data: Buffer = partial ? Buffer.concat([partial, chunk]) : chunk;
-    let start = 0;
-    for (let i = data.indexOf(0x0a, start); i !== -1; i = data.indexOf(0x0a, start)) {
-      const line = data.toString('utf8', start, i);
-      start = i + 1;
+    const fed = pending.push(chunk);
+    discarded += fed.discarded;
+    for (const buf of fed.lines) {
+      const line = buf.toString('utf8');
       if (line) take(line);
     }
-    partial = start < data.length ? Buffer.from(data.subarray(start)) : null;
   }
-  if (partial?.length) take(partial.toString('utf8'));
+  const rest = pending.flush();
+  if (rest?.length) {
+    const line = rest.toString('utf8');
+    if (line) take(line);
+  }
+  if (discarded) warnOversizedLine(path);
   state.skipUsage = undefined;
   return { state, signals, activities: activities.slice(-keep), shellEvents };
 }
@@ -831,7 +834,6 @@ export function mergePrefix(state: TranscriptState, prefix: TranscriptState): vo
   if (prefix.firstAt !== undefined && (state.firstAt === undefined || prefix.firstAt < state.firstAt)) state.firstAt = prefix.firstAt;
   if (!state.sawTaskReplace && state.taskOpsLog) state.tasks = state.taskOpsLog.reduce(applyTaskOp, prefix.tasks);
   state.taskOpsLog = null;
-  state.taskSeq = Math.max(state.taskSeq, prefix.taskSeq);
   state.stats.toolCalls += prefix.stats.toolCalls;
   state.stats.tokensIn += prefix.stats.tokensIn;
   state.stats.tokensOut += prefix.stats.tokensOut;

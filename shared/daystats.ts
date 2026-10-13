@@ -9,6 +9,7 @@
 // consulta (queryDay), no fuso de quem pergunta: o Docker roda em UTC e o navegador no fuso do usuário, e os
 // dois concordam sobre onde o dia começa e termina.
 import type { AgentInfo, AgentStatus } from './types';
+import { tr } from './i18n';
 
 export const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
@@ -325,7 +326,7 @@ function offsetMs(t: number, tz: string): number {
 /** Primeiro instante do dia `key` no fuso `tz` (meia-noite, ou o começo real em dias de horário de verão). */
 export function dayStart(key: string, tz: string): number {
   const k = parseDayKey(key);
-  if (!k) throw new RangeError(`dia inválido: ${key}`);
+  if (!k) throw new RangeError(tr('dia inválido: {0}', [key]));
   const guess = Date.UTC(k.y, k.m - 1, k.d);
   let t = guess - offsetMs(guess, tz);
   t = guess - offsetMs(t, tz);
@@ -565,7 +566,7 @@ export function parseDayFile(raw: unknown, key: string): DayData | null {
       if (!agentId || !start || end < start) continue;
       const rec: WaitRecord = {
         agentId,
-        agentName: text(wo.agentName, LIMITS.name) ?? 'Agente',
+        agentName: text(wo.agentName, LIMITS.name) ?? tr('Agente'),
         roomId: text(wo.roomId) ?? '',
         account: text(wo.account) ?? '',
         start,
@@ -708,12 +709,17 @@ export class StatsBook {
     day.waits.push(rec);
     if (day.waits.length > MAX_WAITS_PER_DAY) {
       // Cheio: sai a espera fechada mais curta.
+      const length = (i: number) => day.waits[i].end - day.waits[i].start;
       let worst = -1;
       day.waits.forEach((w, i) => {
         if (w.open || w === rec) return;
-        if (worst < 0 || w.end - w.start < day.waits[worst].end - day.waits[worst].start) worst = i;
+        if (worst < 0 || length(i) < length(worst)) worst = i;
       });
-      if (worst >= 0) day.waits.splice(worst, 1);
+      // Sem nenhuma fechada para tirar (todas ainda abertas): sai a mais curta de todas, para o limite valer sempre.
+      if (worst < 0) {
+        for (let i = 0; i < day.waits.length; i++) if (worst < 0 || length(i) < length(worst)) worst = i;
+      }
+      day.waits.splice(worst, 1);
     }
     this.touch(day, rec.end);
   }

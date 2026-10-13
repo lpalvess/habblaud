@@ -49,6 +49,11 @@ describe('mockOptionsFrom', () => {
     expect(mockOptionsFrom('?sessions=6.7&speed=2')).toEqual({ speed: 2, sessions: 6 });
     expect(mockOptionsFrom('?sessions=999&speed=999')).toEqual({ speed: 50, sessions: 40 });
   });
+
+  it('para capturas de tela: semente fixa e o Codex sem cota', () => {
+    expect(mockOptionsFrom('?mock=1&seed=7&noquota=1')).toEqual({ speed: 1, sessions: 4, seed: 7, codexNoQuota: true });
+    expect(mockOptionsFrom('?seed=-1&noquota=0')).toEqual({ speed: 1, sessions: 4 });
+  });
 });
 
 describe('reconnectDelay', () => {
@@ -77,6 +82,15 @@ describe('OfficeStore: reconexão', () => {
   afterEach(() => {
     store.disconnect();
     vi.useRealTimers();
+  });
+
+  it('connect() repetido mantém um único stream, fechado por disconnect()', () => {
+    store.connect();
+    store.connect();
+    last().open();
+    store.connect();
+    store.disconnect();
+    expect(sources.map((s) => s.closed)).toEqual([true]);
   });
 
   it('religa sozinho com espera crescente quando o navegador desiste do stream', () => {
@@ -129,6 +143,40 @@ describe('OfficeStore: reconexão', () => {
     expect(store.nextRetryAt).toBeNull();
     vi.advanceTimersByTime(60_000);
     expect(sources).toHaveLength(2);
+  });
+
+  it('disconnect() remove o listener de rede e connect() o restaura sem acumular', () => {
+    const online = new Set<EventListener>();
+    vi.stubGlobal('addEventListener', (type: string, cb: EventListener) => {
+      if (type === 'online') online.add(cb);
+    });
+    vi.stubGlobal('removeEventListener', (type: string, cb: EventListener) => {
+      if (type === 'online') online.delete(cb);
+    });
+    store = new OfficeStore({
+      eventSource: () => {
+        const s = new FakeSource();
+        sources.push(s);
+        return s;
+      },
+    });
+    try {
+      for (let i = 0; i < 3; i++) {
+        store.connect();
+        expect(online.size).toBe(1);
+        last().fail();
+        online.forEach((cb) => cb(new Event('online')));
+        expect(sources).toHaveLength((i + 1) * 2);
+        expect(store.nextRetryAt).toBeNull();
+        store.disconnect();
+        expect(online.size).toBe(0);
+        vi.advanceTimersByTime(60_000);
+        expect(sources).toHaveLength((i + 1) * 2);
+      }
+    } finally {
+      store.disconnect();
+      vi.unstubAllGlobals();
+    }
   });
 
   it('disconnect() não reconecta e eventos do stream antigo são ignorados', () => {
@@ -244,5 +292,35 @@ describe('fonte alternativa (timelapse)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('personagem do projeto (store)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('saveCharacter: PUT JSON na rota do agente; devolve undefined ou a mensagem de erro do servidor', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: 'Ana já está no escritório em api' }), { status: 409 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const store = new OfficeStore();
+    expect(await store.saveCharacter('.claude:1', { name: 'Ana', seed: 1, parts: {} })).toBe('Ana já está no escritório em api');
+    expect(fetchMock).toHaveBeenCalledWith('/api/agents/.claude%3A1/character', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"name":"Ana","seed":1,"parts":{}}',
+    });
+    fetchMock.mockResolvedValueOnce(new Response('{"ok":true}', { status: 200 }));
+    expect(await store.saveCharacter('.claude:1', { name: 'Ana', seed: 1, parts: {} })).toBeUndefined();
+  });
+
+  it('resetCharacter: DELETE com corpo JSON; sem conexão vira mensagem; no mock não chama a rede', async () => {
+    const fetchMock = vi.fn(async () => new Response('{"ok":true}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await new OfficeStore().resetCharacter('a')).toBeUndefined();
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/agents/a/character', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    fetchMock.mockRejectedValueOnce(new TypeError('failed to fetch'));
+    expect(await new OfficeStore().resetCharacter('a')).toBe('Sem conexão com o Habblaud.');
+    const calls = fetchMock.mock.calls.length;
+    expect(await new OfficeStore({ mock: true }).resetCharacter('a')).toMatch(/ao vivo/);
+    expect(fetchMock.mock.calls.length).toBe(calls);
   });
 });

@@ -12,7 +12,8 @@
 //
 // Só entram os campos que o mundo e a interface usam para desenhar, com os resumos de atividade já
 // mascarados (a mesma exposição do /api/snapshot): nada de detalhe de comando, tarefa ou transcript.
-import type { AccountInfo, AccountUsage, Activity, ActivityKind, AgentInfo, AgentKind, AgentStatus, OfficeSnapshot, RoomInfo, ShellJob } from './types';
+import type { AppearanceParts } from './appearance';
+import type { AccountInfo, AccountUsage, Activity, ActivityKind, AgentInfo, AgentKind, AgentStatus, OfficeSnapshot, Provider, RoomInfo, ShellJob } from './types';
 
 export const TIMELINE_VERSION = 1;
 
@@ -41,6 +42,8 @@ export interface TimelineShell {
 export interface TimelineAgent {
   id: string;
   kind: AgentKind;
+  /** Ausente = 'claude' (AgentInfo.provider). */
+  provider?: Provider;
   parentId?: string;
   roomId: string;
   name: string;
@@ -53,6 +56,8 @@ export interface TimelineAgent {
   waitingFor?: string;
   activity?: TimelineActivity;
   seed: number;
+  /** Peças do personagem editado (ver AgentInfo.parts). */
+  parts?: AppearanceParts;
   background?: true;
   title?: string;
   shells?: TimelineShell[];
@@ -73,12 +78,14 @@ export interface TimelineRoom {
 /** Conta resumida: sem e-mail, organização nem pasta; uso sem o horário da coleta (mudaria a cada resposta). */
 export interface TimelineAccount {
   id: string;
+  /** Ausente = 'claude' (AccountInfo.provider). */
+  provider?: Provider;
   short: string;
   name: string;
   color: string;
   plan?: string;
   sessions: number;
-  usage?: Pick<AccountUsage, 'fiveHour' | 'sevenDay' | 'source'>;
+  usage?: Pick<AccountUsage, 'fiveHour' | 'sevenDay' | 'source' | 'noQuota'>;
   usageStatus: AccountInfo['usageStatus'];
   demo?: true;
 }
@@ -189,10 +196,12 @@ export function compactAgent(a: AgentInfo, demo = false): TimelineAgent {
     startedAt: a.startedAt,
     seed: a.seed,
   };
+  if (a.provider) out.provider = a.provider;
   if (a.parentId) out.parentId = a.parentId;
   if (a.waitingFor) out.waitingFor = a.waitingFor;
   if (a.activity) out.activity = compactActivity(a.activity);
   if (a.background) out.background = true;
+  if (a.parts && Object.keys(a.parts).length) out.parts = { ...a.parts };
   if (a.title) out.title = clip(a.title, MAX_TITLE);
   if (a.shells?.length) out.shells = a.shells.map(compactShell);
   if (demo) out.demo = true;
@@ -207,11 +216,13 @@ export function compactRoom(r: RoomInfo, demo = false): TimelineRoom {
 
 export function compactAccount(a: AccountInfo, demo = false): TimelineAccount {
   const out: TimelineAccount = { id: a.id, short: a.short, name: a.name, color: a.color, sessions: a.sessions, usageStatus: a.usageStatus };
+  if (a.provider) out.provider = a.provider;
   if (a.plan) out.plan = a.plan;
   if (a.usage) {
     const u: NonNullable<TimelineAccount['usage']> = { source: a.usage.source };
     if (a.usage.fiveHour) u.fiveHour = { ...a.usage.fiveHour };
     if (a.usage.sevenDay) u.sevenDay = { ...a.usage.sevenDay };
+    if (a.usage.noQuota) u.noQuota = true;
     out.usage = u;
   }
   if (demo) out.demo = true;
@@ -413,12 +424,14 @@ export function toAgentInfo(t: TimelineAgent, recent: Activity[] = []): AgentInf
     stats: { ...ZERO_STATS },
     seed: t.seed,
   };
+  if (t.provider) a.provider = t.provider;
   if (t.parentId) a.parentId = t.parentId;
   if (t.title) a.title = t.title;
   if (t.waitingFor) a.waitingFor = t.waitingFor;
   if (activity) a.activity = activity;
   if (t.shells?.length) a.shells = t.shells.map((j) => ({ ...j }));
   if (t.background) a.background = true;
+  if (t.parts) a.parts = { ...t.parts };
   return a;
 }
 
@@ -428,11 +441,13 @@ export function toRoomInfo(r: TimelineRoom): RoomInfo {
 
 export function toAccountInfo(a: TimelineAccount, at: number): AccountInfo {
   const out: AccountInfo = { id: a.id, short: a.short, name: a.name, color: a.color, configDir: '', sessions: a.sessions, usageStatus: a.usageStatus };
+  if (a.provider) out.provider = a.provider;
   if (a.plan) out.plan = a.plan;
   if (a.usage) {
     const u: AccountUsage = { source: a.usage.source, fetchedAt: at };
     if (a.usage.fiveHour) u.fiveHour = { ...a.usage.fiveHour };
     if (a.usage.sevenDay) u.sevenDay = { ...a.usage.sevenDay };
+    if (a.usage.noQuota) u.noQuota = true;
     out.usage = u;
   }
   return out;

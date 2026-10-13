@@ -1,6 +1,6 @@
-// Histórico do terminal somente leitura: as sessões recentes de cada conta (abertas ou já encerradas),
-// listadas a partir dos transcripts <config>/projects/<projeto>/<sessionId>.jsonl (no Docker, a pasta
-// projects/ de cada conta montada só para leitura). De cada arquivo lê só o começo (projeto, primeira
+// Histórico do terminal do Claude Code (o HistoryProvider 'claude', ver sources/source.ts): as sessões recentes
+// de cada conta (abertas ou já encerradas), listadas a partir dos transcripts
+// <config>/projects/<projeto>/<sessionId>.jsonl (no Docker, a pasta projects/ de cada conta montada só para leitura). De cada arquivo lê só o começo (projeto, primeira
 // atividade e o primeiro prompt) e o fim (título e última atividade), nunca o arquivo inteiro, e guarda o
 // resultado enquanto o mtime e o tamanho não mudam. Subagentes (<sessão>/subagents/) ficam de fora.
 import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs';
@@ -9,10 +9,12 @@ import { join, sep } from 'node:path';
 import { truncate } from '../../shared/activity';
 import type { AgentInfo, RecentSession } from '../../shared/types';
 import { errMsg, log } from '../log';
+import type { HistoryProvider, HistoryResolveResult } from './source';
 import { sessionDirOf } from './subagents';
 import { createTerminalParser } from './terminal';
 import { createTranscriptState, parseLine, titleOf } from './transcript';
 import { readCustomTitleFile } from './watcher';
+import { tr } from '../../shared/i18n';
 
 /** Janela da listagem: sessões com o transcript modificado nos últimos 7 dias. */
 export const HISTORY_DAYS = 7;
@@ -70,15 +72,16 @@ interface Candidate {
   size: number;
 }
 
-/** Resultado de resolve(): o caminho do transcript ou o erro HTTP. */
-export type ResolveResult = { path: string } | { status: 400 | 404; error: string };
+/** Resultado de resolve(): o caminho do transcript (com o parser do terminal do Claude Code) ou o erro HTTP. */
+export type ResolveResult = HistoryResolveResult;
 
 /** Agente principal (ainda no escritório e não encerrado) da sessão `sessionId` da conta. */
 export function openMainAgent(agents: readonly AgentInfo[], account: string, sessionId: string): string | undefined {
   return agents.find((a) => a.kind === 'main' && a.account === account && a.sessionId === sessionId && a.status !== 'offline')?.id;
 }
 
-export class SessionHistory {
+export class SessionHistory implements HistoryProvider {
+  readonly provider = 'claude' as const;
   /** Metadados por caminho, válidos enquanto mtime e tamanho forem os mesmos. */
   private cache = new Map<string, { mtimeMs: number; size: number; meta: SessionMeta }>();
   private readonly now: () => number;
@@ -91,6 +94,10 @@ export class SessionHistory {
     this.now = opts.now ?? Date.now;
     this.maxAgeMs = opts.maxAgeMs ?? HISTORY_MAX_AGE_MS;
     this.limit = opts.limit ?? HISTORY_LIMIT;
+  }
+
+  hasAccount(account: string): boolean {
+    return this.opts.accounts().some((a) => a.id === account);
   }
 
   /** Sessões recentes de todas as contas, da atividade mais recente para a mais antiga. */
@@ -133,11 +140,11 @@ export class SessionHistory {
    * ter formato de UUID e o arquivo (com links resolvidos) precisa ficar dentro da pasta projects/ da conta.
    */
   resolve(account: string, sessionId: string): ResolveResult {
-    if (!isSessionId(sessionId)) return { status: 400, error: 'id de sessão inválido' };
+    if (!isSessionId(sessionId)) return { status: 400, error: tr('id de sessão inválido') };
     const acc = this.opts.accounts().find((a) => a.id === account);
-    if (!acc) return { status: 404, error: 'conta desconhecida' };
+    if (!acc) return { status: 404, error: tr('conta desconhecida') };
     const projects = join(acc.dir, 'projects');
-    const notFound: ResolveResult = { status: 404, error: 'sessão não encontrada' };
+    const notFound: ResolveResult = { status: 404, error: tr('sessão não encontrada') };
     let root: string;
     let dirs: string[];
     try {
@@ -154,7 +161,7 @@ export class SessionHistory {
         const real = realpathSync(candidate);
         // Um link dentro de projects/ apontando para fora não serve.
         if (!real.startsWith(root + sep) || !statSync(real).isFile()) continue;
-        return { path: real };
+        return { path: real, createParser: createTerminalParser };
       } catch {
         // sumiu entre a listagem e a leitura
       }
@@ -204,7 +211,7 @@ export class SessionHistory {
       this.reads++;
       meta = await readSessionMeta(c.path, c.size);
     } catch (err) {
-      log.warnOnce(`history:${errMsg(err)}`, `Histórico de sessões: transcript ilegível (${errMsg(err)}).`);
+      log.warnOnce(`history:${errMsg(err)}`, tr('Histórico de sessões: transcript ilegível ({0}).', [errMsg(err)]));
       meta = {};
     }
     this.cache.set(c.path, { mtimeMs: c.mtimeMs, size: c.size, meta });

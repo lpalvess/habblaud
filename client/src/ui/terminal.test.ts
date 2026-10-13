@@ -3,6 +3,7 @@ import type { AgentInfo, ShellJob, TerminalEntry } from '../../../shared/types';
 import {
   diffLineKind,
   entryKey,
+  footerGlyph,
   entryTimeTitle,
   moreLabel,
   parseAppend,
@@ -13,6 +14,7 @@ import {
   sessionProjectName,
   sessionTerminalUrl,
   showToolInput,
+  spinnerFrames,
   splitPreview,
   splitToolTitle,
   TerminalLog,
@@ -219,7 +221,12 @@ describe('terminalFooter', () => {
   });
 
   it('esperando você, ocioso e encerrado', () => {
-    expect(terminalFooter(agent({ status: 'waiting', waitingFor: 'aprovar uma permissão' }), [], now).text).toBe('Esperando você: aprovar uma permissão');
+    const perm = { id: 'p1', tool: 'Bash', title: 'Bash(ls)' } as unknown as NonNullable<AgentInfo['permission']>;
+    expect(terminalFooter(agent({ status: 'waiting', waitingFor: 'aprovar uma permissão', permission: perm }), [], now).text).toBe('Esperando você: aprovar uma permissão');
+    expect(terminalFooter(agent({ status: 'waiting', waitingFor: 'aprovar uma permissão' }), [], now).text).toBe(
+      'Esperando você: aprovar uma permissão · responda no Claude Code: este pedido não chegou ao Habblaud ou passou do tempo de espera',
+    );
+    expect(terminalFooter(agent({ status: 'waiting', provider: 'codex' }), [], now).text).toMatch(/^Esperando você · responda no Codex:/);
     expect(terminalFooter(agent({ status: 'idle' }), [], now)).toEqual({ kind: 'idle', text: 'Aguardando o próximo prompt' });
     expect(terminalFooter(agent({ status: 'offline' }), [], now).kind).toBe('ended');
     expect(terminalFooter(agent({ kind: 'sub', status: 'done' }), [], now).kind).toBe('ended');
@@ -264,5 +271,17 @@ describe('utilitários', () => {
     expect(entryTimeTitle(new Date(2026, 9, 8, 14, 30, 5).getTime(), now)).toMatch(/14:30:05/);
     expect(entryTimeTitle(new Date(2026, 9, 6, 9, 5).getTime(), now)).toMatch(/06.*09:05/);
     expect(entryTimeTitle(NaN, now)).toBe('');
+  });
+});
+
+describe('rodapé do Codex', () => {
+  it('spinner e símbolo neutros (o ✻ é do Claude Code); o resto é igual', () => {
+    expect(spinnerFrames('claude')).toContain('✻');
+    expect(spinnerFrames('codex')).not.toContain('✻');
+    expect(spinnerFrames('codex')).toHaveLength(spinnerFrames('claude').length);
+    expect(footerGlyph('working', 'claude')).toBe('✻');
+    expect(footerGlyph('working', 'codex')).toBe('•');
+    expect(footerGlyph('waiting', 'codex')).toBe('✋');
+    expect(footerGlyph('ended', 'claude')).toBe('■');
   });
 });

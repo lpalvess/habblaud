@@ -1,8 +1,9 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { log } from '../log';
 import { L, tempDir } from '../test/fixtures';
-import { FileTail } from './tail';
+import { FileTail, MAX_LINE_BYTES } from './tail';
 import {
   applyTaskOp,
   createTranscriptState,
@@ -369,6 +370,33 @@ describe('parseLine — sinais de shells', () => {
       tmp.cleanup();
     }
   });
+
+  it('scanPrefix ignora linha acima do teto e lê as vizinhas', async () => {
+    const tmp = tempDir();
+    const warn = vi.spyOn(log, 'warnOnce').mockImplementation(() => {});
+    try {
+      const file = join(tmp.dir, 's.jsonl');
+      const before = `${L.raw('custom-title', { customTitle: 'Antes' })}\n`;
+      const after = `${L.raw('ai-title', { aiTitle: 'Depois' })}\n`;
+      const body = Buffer.concat([
+        Buffer.from(before),
+        Buffer.from('{"type":"agent-name","sessionId":"sess-teste","agentName":"'),
+        Buffer.alloc(MAX_LINE_BYTES, 0x6e),
+        Buffer.from('"}\n'),
+        Buffer.from(after),
+      ]);
+      writeFileSync(file, body);
+      const prefix = await scanPrefix(file, body.length, new Set());
+      expect(prefix.state.customTitle).toBe('Antes');
+      expect(prefix.state.aiTitle).toBe('Depois');
+      // Booleano de propósito: o valor antigo é a linha gigante, e o diff não pode imprimi-la.
+      expect(prefix.state.agentName === undefined).toBe(true);
+      expect(warn).toHaveBeenCalledWith(`oversize-line:${file}`, expect.stringContaining('8 MiB'));
+    } finally {
+      warn.mockRestore();
+      tmp.cleanup();
+    }
+  });
 });
 
 describe('janela final + prefixo em segundo plano', () => {
@@ -411,6 +439,30 @@ describe('janela final + prefixo em segundo plano', () => {
     } finally {
       tmp.cleanup();
     }
+  });
+
+  it.each(['antes', 'depois'])('TaskCreate preserva a tarefa concluída do prefixo quando o resultado chega %s da mesclagem', (quando) => {
+    const prefix = createTranscriptState();
+    feed(prefix, [
+      L.assistant([L.tool('c1', 'TaskCreate', { subject: 'Antiga' })]),
+      L.result('c1', 'Task #1 created successfully'),
+      L.assistant([L.tool('u1', 'TaskUpdate', { taskId: '1', status: 'completed' })]),
+    ]);
+    const state = createTranscriptState({ trackPrefix: true });
+    feed(state, [L.assistant([L.tool('c2', 'TaskCreate', { subject: 'Nova' })])]);
+    const result = L.result('c2', 'Task #29 created successfully');
+    if (quando === 'antes') feed(state, [result]);
+
+    mergePrefix(state, prefix);
+    if (quando === 'depois') {
+      expect(state.tasks).toHaveLength(2);
+      expect(state.tasks[0]).toEqual({ id: '1', title: 'Antiga', status: 'completed' });
+      feed(state, [result]);
+    }
+    expect(state.tasks).toEqual([
+      { id: '1', title: 'Antiga', status: 'completed' },
+      { id: '29', title: 'Nova', status: 'pending' },
+    ]);
   });
 
   it('applyTaskOp ignora atualização de tarefa desconhecida', () => {

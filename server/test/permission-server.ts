@@ -1,6 +1,8 @@
 // Servidor de teste para "responder pelo escritório": Office + Hub + rotas de verdade (guard, app e
 // /api/permissions) numa porta livre do 127.0.0.1, com um agente principal na sessão "sess-1".
 // Usado pelos testes das rotas e do hook (mod/habblaud-permissoes/hooks/permission-hook.mjs rodado como processo).
+// Com `codex`, também um agente principal do Codex (conta ".codex", thread CODEX_THREAD) e a fonte do Codex ao vivo
+// (`codexLive`, um falso) para o hook do Codex (mod/habblaud-codex/hook.mjs).
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { AccountsService } from '../accounts/service';
@@ -11,10 +13,14 @@ import { NameStore } from '../model/names';
 import { Office } from '../model/office';
 import { createPermissionRoutes } from '../permissions/http';
 import { PermissionRegistry, type RegistryOptions } from '../permissions/registry';
+import type { CodexLive } from '../sources/codex/live';
 import { tempDir } from './fixtures';
 
 export const MAIN = 'acc:1';
 export const SESSION = 'sess-1';
+/** Thread (sintético) do agente do Codex do servidor de teste. */
+export const CODEX_THREAD = '0199b0c0-1234-7abc-8def-0123456789ab';
+export const CODEX_MAIN = `.codex:${CODEX_THREAD}`;
 
 export interface PermissionServer {
   base: string;
@@ -26,7 +32,9 @@ export interface PermissionServer {
   close(): Promise<void>;
 }
 
-export async function servePermissions(opts: { enabled?: boolean; viewers?: number; demo?: boolean; registry?: Partial<RegistryOptions> } = {}): Promise<PermissionServer> {
+export async function servePermissions(
+  opts: { enabled?: boolean; viewers?: number; demo?: boolean; registry?: Partial<RegistryOptions>; codex?: boolean; codexLive?: CodexLive } = {},
+): Promise<PermissionServer> {
   const tmp = tempDir();
   const enabled = opts.enabled ?? true;
   let viewers = opts.viewers ?? 1;
@@ -64,6 +72,7 @@ export async function servePermissions(opts: { enabled?: boolean; viewers?: numb
     inDocker: false,
     terminal: enabled,
     permissions: registry ? createPermissionRoutes(registry) : undefined,
+    codexLive: opts.codexLive,
   });
   const guard = createRequestGuard({ allowedHosts: new Set(['habblaud.lan']) });
   const server = http.createServer((req, res) => {
@@ -73,6 +82,9 @@ export async function servePermissions(opts: { enabled?: boolean; viewers?: numb
   await new Promise<void>((ok) => server.listen(0, '127.0.0.1', ok));
   const port = (server.address() as AddressInfo).port;
   office.addMain({ id: MAIN, account: 'acc', sessionId: SESSION, cwd: '/p/loja', role: 'Agente principal', startedAt: Date.now(), status: 'working' });
+  if (opts.codex) {
+    office.addMain({ id: CODEX_MAIN, provider: 'codex', account: '.codex', sessionId: CODEX_THREAD, cwd: '/p/loja', role: 'Agente principal', startedAt: Date.now(), status: 'working' });
+  }
   if (opts.demo) office.setDemo(true);
   return {
     base: `http://127.0.0.1:${port}`,

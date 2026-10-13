@@ -104,6 +104,30 @@ describe('segredos mascarados', () => {
     expect(describePrompt('usa a chave sk-proj-0123456789abcdef pra testar').detail).toBe('usa a chave sk-*** pra testar');
   });
 
+  it('webhooks e tokens npm_/hf_ (o segredo some, o host fica)', () => {
+    // Montado em partes: o URL inteiro no fonte dispara o push protection do GitHub.
+    const slack = ['https://hooks.slack.com/services', 'T00000000', 'B00000000', 'X'.repeat(24)].join('/');
+    expect(maskSecrets(`curl -X POST ${slack}`)).toBe(
+      'curl -X POST https://hooks.slack.com/services/***',
+    );
+    expect(maskSecrets('https://discord.com/api/webhooks/123456789012345678/AbCdEfGhIjKlMnOpQrStUvWxYz-_0123456789')).toBe(
+      'https://discord.com/api/webhooks/***',
+    );
+    expect(maskSecrets('https://discordapp.com/api/webhooks/123456789012345678/AbCdEfGhIjKlMnOpQrStUvWxYz-_0123456789')).toBe(
+      'https://discordapp.com/api/webhooks/***',
+    );
+    expect(maskSecrets('curl https://api.telegram.org/bot123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsawX/sendMessage')).toBe(
+      'curl https://api.telegram.org/bot***/sendMessage',
+    );
+    expect(maskSecrets('usa npm_1234567890abcdef1234567890abcdef1234 no ci')).toBe('usa npm_*** no ci');
+    expect(maskSecrets('chave hf_abcdefghijklmnopqrstuvwxyz01234567 solta')).toBe('chave hf_*** solta');
+  });
+
+  it('texto comum com npm ou hf não é segredo', () => {
+    const s = 'rode npm test e npm run build; o modelo hf da huggingface usa npm_config_cache';
+    expect(maskSecrets(s)).toBe(s);
+  });
+
   it('shell: palavras e segmentos', () => {
     expect(shellWords(`a 'b c' "d \\"e\\"" f\\ g ''`)).toEqual(['a', 'b c', 'd "e"', 'f g', '']);
     expect(splitShell('a && b | c; d & e 2>&1 || f "x|y" $(g; h)')).toEqual(['a', 'b', 'c', 'd', 'e 2>&1', 'f "x|y" $(g; h)']);
@@ -112,6 +136,13 @@ describe('segredos mascarados', () => {
 });
 
 describe('atividades', () => {
+  it('TodoWrite ignora itens que não são objetos e tolera tarefas sem status', () => {
+    expect(describeTool('TodoWrite', { todos: [null] })).toEqual({ kind: 'plan', icon: '🗒️', text: 'Atualizando a lista de tarefas' });
+    expect(describeTool('TodoWrite', {
+      todos: [null, undefined, 'inválido', 42, false, { content: 'Sem status' }, { content: 'Pronta', status: 'completed' }, { content: 'Pendente', status: 'pending' }],
+    }).detail).toBe('1/3 concluídas');
+  });
+
   it('ferramentas e especiais em PT-BR', () => {
     expect(describeTool('Agent', { description: 'Revisar código', subagent_type: 'Explore' })).toMatchObject({ kind: 'delegate', text: 'Delegando: Revisar código' });
     expect(SPECIAL.rejected('Write').text).toBe('Você recusou: Write');
@@ -153,5 +184,52 @@ describe('shells', () => {
     expect(ok.text.length).toBeLessThanOrEqual(46);
     expect(SPECIAL.shellDone('Migração', 'failed')).toEqual({ kind: 'run', icon: '❌', text: 'Shell falhou: Migração', tool: 'ShellDone', error: true });
     expect(SPECIAL.shellDone('Migração', 'killed')).toMatchObject({ icon: '🛑', text: 'Shell interrompido: Migração', error: true });
+  });
+});
+
+describe('AskUserQuestion no escritório', () => {
+  it('leva as perguntas completas, com opções, para o cartão "Precisa de você"', () => {
+    const d = describeTool('AskUserQuestion', {
+      questions: [
+        {
+          question: 'Qual banco usar?',
+          header: 'Banco',
+          multiSelect: false,
+          options: [
+            { label: 'Postgres', description: 'Relacional, já usado no projeto' },
+            { label: 'SQLite' },
+          ],
+        },
+        { question: 'Quais testes rodar?', multiSelect: true, options: [{ label: 'Unidade' }, { label: 'E2E' }] },
+      ],
+    });
+    expect(d).toMatchObject({ kind: 'ask', text: 'Fazendo uma pergunta a você', detail: 'Qual banco usar?' });
+    expect(d.questions).toEqual([
+      {
+        index: 0,
+        question: 'Qual banco usar?',
+        header: 'Banco',
+        options: [
+          { index: 0, label: 'Postgres', description: 'Relacional, já usado no projeto' },
+          { index: 1, label: 'SQLite' },
+        ],
+      },
+      { index: 1, question: 'Quais testes rodar?', multiSelect: true, options: [{ index: 0, label: 'Unidade' }, { index: 1, label: 'E2E' }] },
+    ]);
+  });
+
+  it('mascara segredos e ignora entradas inválidas', () => {
+    const d = describeTool('AskUserQuestion', {
+      questions: [null, { question: '' }, { question: 'Usar a chave sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789?', options: [{ label: '' }, { label: 'Sim' }] }],
+    });
+    expect(d.questions).toHaveLength(1);
+    expect(d.questions![0]!.question).not.toContain('abcdefghijklmnop');
+    // As posições são as do original (a resposta pelo escritório volta por elas), com as inválidas contadas.
+    expect(d.questions![0]!.index).toBe(2);
+    expect(d.questions![0]!.options).toEqual([{ index: 1, label: 'Sim' }]);
+  });
+
+  it('sem perguntas válidas, não cria o campo', () => {
+    expect(describeTool('AskUserQuestion', {}).questions).toBeUndefined();
   });
 });

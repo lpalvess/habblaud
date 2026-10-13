@@ -2,7 +2,7 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#12151d" />
     <meta name="description" content="Escritório virtual em pixel art que mostra, em tempo real, o que seus agentes do Claude Code estão fazendo." />
@@ -25,6 +25,12 @@
     <link rel="icon" href="/assets/brand/favicon-32.png" type="image/png" sizes="32x32" />
     <link rel="icon" href="/assets/brand/favicon-16.png" type="image/png" sizes="16x16" />
     <link rel="apple-touch-icon" href="/assets/brand/apple-touch-icon.png" />
+    <!-- App na Tela de Início (celular): tela cheia, ícone e nome. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Habblaud" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <style>
       html, body { margin: 0; height: 100%; overflow: hidden; background: #12151d; }
       #world { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; image-rendering: pixelated; }

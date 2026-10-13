@@ -20,13 +20,16 @@ export class Hub {
   private snapshotCbs = new Set<(snap: OfficeSnapshot) => void>();
   private readonly throttleMs: number;
   private readonly pingMs: number;
+  /** Quem pode responder pelo escritório; padrão: Host local. A porta remota (http/remote.ts) troca a regra. */
+  private readonly canAnswer: (req: IncomingMessage) => boolean;
 
   constructor(
     private readonly office: Office,
-    opts: { throttleMs?: number; pingMs?: number } = {},
+    opts: { throttleMs?: number; pingMs?: number; canAnswer?: (req: IncomingMessage) => boolean } = {},
   ) {
     this.throttleMs = opts.throttleMs ?? 200;
     this.pingMs = opts.pingMs ?? 15_000;
+    this.canAnswer = opts.canAnswer ?? ((req) => isLoopbackHost(req.headers.host));
   }
 
   start(): void {
@@ -78,7 +81,7 @@ export class Hub {
     res.write(frame('snapshot', snapshot));
     res.write(frame('feed', this.office.recentFeed(50)));
     this.clients.add(res);
-    if (isLoopbackHost(req.headers.host)) this.local.add(res);
+    if (this.canAnswer(req)) this.local.add(res);
     const drop = () => this.clients.delete(res);
     req.on('close', drop);
     res.on('close', drop);

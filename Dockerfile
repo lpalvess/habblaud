@@ -9,7 +9,9 @@
 # ---------------------------------------------------------------------------------------------
 # Estágio 1: compila o cliente (Vite) e empacota o servidor (esbuild) em dist/.
 # ---------------------------------------------------------------------------------------------
-FROM node:24-alpine AS builder
+# A imagem base fica presa pelo digest (o mesmo nos dois estágios), para o build ser reproduzível; o Dependabot
+# (.github/dependabot.yml, ecossistema docker) troca a tag e o digest juntos quando sai versão nova.
+FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS builder
 WORKDIR /app
 
 # Dependências primeiro: a camada fica em cache enquanto o lockfile não mudar.
@@ -23,7 +25,7 @@ RUN npm run build
 # Estágio 2: runtime enxuto. O servidor não tem dependências de runtime (só módulos node:*),
 # então basta o dist/ e o package.json (nome, versão e "type": "module").
 # ---------------------------------------------------------------------------------------------
-FROM node:24-alpine AS runtime
+FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS runtime
 
 # HABBLAUD_USAGE_DIR: onde o docker-up monta (somente leitura) o uso capturado pelo tap de statusline.
 ENV NODE_ENV=production \

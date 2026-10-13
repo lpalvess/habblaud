@@ -22,6 +22,8 @@
 // - Paleta clara (neutros frios + madeira quente + acentos saturados nos objetos); contorno 1px cinza-azulado
 //   escuro (não preto); 3–4 tons por material; brilhos especulares; sombras de contato; muitos detalhes pequenos.
 
+import type { AppearanceParts } from '../../../shared/appearance';
+
 export const TILE = 16;
 
 export type Dir = 'down' | 'up' | 'left' | 'right';
@@ -131,6 +133,8 @@ export interface CharacterFrameRequest {
   held?: HeldItem;
   /** Para poses que podem ser em pé ou sentado (raise_hand, read, talk). */
   seated?: boolean;
+  /** Acessório sazonal; ausente mantém a aparência original. */
+  costume?: 'santa' | 'witch' | 'pumpkin' | 'vampire';
 }
 
 export type FurnitureKind =
@@ -332,7 +336,7 @@ export type IconName = 'alert' | 'question' | 'zzz' | 'check' | 'heart' | 'coffe
 
 /** Assinatura que art/index.ts deve exportar (o mundo e a UI dependem disto). */
 export interface ArtModule {
-  appearanceFromSeed(seed: number, opts?: { look?: 'f' | 'm'; sub?: boolean }): Appearance;
+  appearanceFromSeed(seed: number, opts?: { look?: 'f' | 'm'; sub?: boolean; parts?: AppearanceParts }): Appearance;
   /** Ancoragem: (ax, ay) = centro dos pés (ponto no chão). Personagem ocupa ~14–18px de largura e ~24–28px de altura. */
   characterSprite(req: CharacterFrameRequest): Sprite;
   poseFrameCount(pose: Pose): number;
@@ -368,6 +372,6 @@ export interface ArtModule {
    * usa para a torcida comemorar junto com a TV.
    */
   footballLance?(t: number, seed: number): { lance: number; progress: number; right: boolean; period: number; goalAt: number };
-  /** Avatar (cabeça + ombros) ampliado para a UI. */
-  avatarCanvas(seed: number, opts?: { look?: 'f' | 'm'; sub?: boolean; scale?: number }): HTMLCanvasElement;
+  /** Avatar (cabeça + ombros) ampliado para a UI. `parts`: peças do personagem editado (ver AgentInfo.parts). */
+  avatarCanvas(seed: number, opts?: { look?: 'f' | 'm'; sub?: boolean; scale?: number; parts?: AppearanceParts }): HTMLCanvasElement;
 }

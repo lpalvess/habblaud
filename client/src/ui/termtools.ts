@@ -1,18 +1,19 @@
-// Ferramentas do terminal somente leitura: busca na conversa (casamentos sem diferenciar maiúsculas nem acentos,
+// Ferramentas do terminal: busca na conversa (casamentos sem diferenciar maiúsculas nem acentos,
 // navegação com contador "3/17"), filtro "Tudo / Só prompts / Sem ferramentas" e o texto copiado de cada entrada.
 // As funções do modelo são puras e testadas em ui/termtools.test.ts. O destaque dos resultados troca nós de texto
 // por spans criados com createElement/textContent: nenhum texto do transcript passa por innerHTML.
 import type { TerminalEntry } from '../../../shared/types';
 import type { TerminalItem } from './terminal';
+import { tr } from '../../../shared/i18n';
 
 // ---------------------------------------------------------------- filtro
 
 export type TerminalFilter = 'all' | 'prompts' | 'noTools';
 
 export const TERMINAL_FILTERS: readonly [TerminalFilter, string, string][] = [
-  ['all', 'Tudo', 'Toda a conversa'],
-  ['prompts', 'Só prompts', 'Só os seus prompts e as respostas finais do agente'],
-  ['noTools', 'Sem ferramentas', 'Esconde as ferramentas e os resultados'],
+  ['all', tr('Tudo'), tr('Toda a conversa')],
+  ['prompts', tr('Só prompts'), tr('Só os seus prompts e as respostas finais do agente')],
+  ['noTools', tr('Sem ferramentas'), tr('Esconde as ferramentas e os resultados')],
 ];
 
 /**

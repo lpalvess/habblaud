@@ -1,4 +1,6 @@
 // Barra superior: marca, conexão, contadores, uso por conta e botões de controle.
+import { access } from '../net/access';
+import { SpawnPanel } from './spawn';
 import type { UiComponent, UiContext } from './context';
 import { h, iconButton, setAttr, setHidden, setText, setTitle, setVariant } from './dom';
 import { formatDuration, formatInt } from './format';
@@ -9,6 +11,7 @@ import { focusPermission, nextPermissionAgent, permissionAgents } from './permis
 import { UsageCards } from './usage';
 import { VersionChip } from './version';
 import { wordmark } from './widgets';
+import { tr } from '../../../shared/i18n';
 
 interface CounterRefs {
   el: HTMLElement;
@@ -18,11 +21,11 @@ interface CounterRefs {
 
 /** Contadores fixos (o de shells é à parte: só aparece quando há shells rodando). */
 const COUNTERS: { key: Exclude<keyof Counters, 'shells'>; singular: string; plural: string; hint: string }[] = [
-  { key: 'rooms', singular: 'sala', plural: 'salas', hint: 'Salas abertas (uma por projeto)' },
-  { key: 'agents', singular: 'agente', plural: 'agentes', hint: 'Agentes no escritório (principais e subagentes)' },
-  { key: 'working', singular: 'trabalhando', plural: 'trabalhando', hint: 'Agentes processando um pedido agora' },
-  { key: 'subagents', singular: 'subagente', plural: 'subagentes', hint: 'Subagentes em atividade' },
-  { key: 'waiting', singular: 'precisa de você', plural: 'precisam de você', hint: 'Agentes esperando sua resposta no terminal' },
+  { key: 'rooms', singular: tr('sala'), plural: tr('salas'), hint: tr('Salas abertas (uma por projeto)') },
+  { key: 'agents', singular: tr('agente'), plural: tr('agentes'), hint: tr('Agentes no escritório (principais e subagentes)') },
+  { key: 'working', singular: tr('trabalhando'), plural: tr('trabalhando'), hint: tr('Agentes processando um pedido agora') },
+  { key: 'subagents', singular: tr('subagente'), plural: tr('subagentes'), hint: tr('Subagentes em atividade') },
+  { key: 'waiting', singular: tr('precisa de você'), plural: tr('precisam de você'), hint: tr('Agentes esperando sua resposta no terminal') },
 ];
 const WAITING_HINT = COUNTERS.find((c) => c.key === 'waiting')!.hint;
 
@@ -42,6 +45,8 @@ export class TopBar implements UiComponent {
   private feedBtn: HTMLButtonElement;
   private timelapseBtn: HTMLButtonElement;
   readonly settingsBtn: HTMLButtonElement;
+  private readonly spawnBtn: HTMLButtonElement;
+  private readonly spawnPanel: SpawnPanel;
   /** Grupo dos botões de painéis (feed, configurações, ajuda); o histórico entra aqui (ui/index.ts). */
   readonly panelGroup: HTMLElement;
 
@@ -56,9 +61,9 @@ export class TopBar implements UiComponent {
 
     this.pillText = h('span', { class: 'ui-pill__text' });
     this.pill = h('span', { class: 'ui-pill', role: 'status', attrs: { 'aria-live': 'polite' } }, h('span', { class: 'ui-pill__dot' }), this.pillText);
-    this.demoBadge = h('span', { class: 'ui-demo-badge', text: 'Demonstração', title: 'Agentes de demonstração ligados (desligue em Configurações)', hidden: true });
+    this.demoBadge = h('span', { class: 'ui-demo-badge', text: tr('Demonstração'), title: tr('Agentes de demonstração ligados (desligue em Configurações)'), hidden: true });
 
-    const counterWrap = h('div', { class: 'ui-counters', role: 'group', attrs: { 'aria-label': 'Resumo do escritório' } });
+    const counterWrap = h('div', { class: 'ui-counters', role: 'group', attrs: { 'aria-label': tr('Resumo do escritório') } });
     for (const c of COUNTERS) {
       const value = h('span', { class: 'ui-counter__value', text: '0' });
       const label = h('span', { class: 'ui-counter__label', text: c.plural });
@@ -67,7 +72,7 @@ export class TopBar implements UiComponent {
         // Em telas pequenas o rótulo some e fica a mão levantada.
         const icon = h('span', { class: 'ui-counter__icon', attrs: { 'aria-hidden': 'true' } });
         icon.innerHTML = ICONS.hand;
-        el = h('button', { class: 'ui-counter ui-counter--waiting', type: 'button', title: `${c.hint}. Clique para ir até o primeiro.`, on: { click: () => this.focusFirstWaiting() } }, icon, value, label);
+        el = h('button', { class: 'ui-counter ui-counter--waiting', type: 'button', title: tr('{0}. Clique para ir até o primeiro.', [c.hint]), on: { click: () => this.focusFirstWaiting() } }, icon, value, label);
       } else {
         el = h('div', { class: `ui-counter ui-counter--${c.key}`, title: c.hint }, value, label);
       }
@@ -93,26 +98,32 @@ export class TopBar implements UiComponent {
 
     this.usage = new UsageCards(ctx);
 
-    this.sidebarBtn = iconButton(ICONS.sidebar, 'Painel lateral ( [ )', () => ctx.togglePanel('sidebar'), 'ui-btn-sidebar');
-    this.feedBtn = iconButton(ICONS.feed, 'Feed de atividade ( ] )', () => ctx.togglePanel('feed'));
-    this.timelapseBtn = iconButton(TIMELAPSE_ICONS.timelapse, 'Timelapse: reproduzir o dia (L)', () => ctx.toggleTimelapse(), 'ui-btn-timelapse');
-    this.settingsBtn = iconButton(ICONS.settings, 'Configurações', () => ctx.toggleSettings());
+    this.sidebarBtn = iconButton(ICONS.sidebar, tr('Painel lateral ( [ )'), () => ctx.togglePanel('sidebar'), 'ui-btn-sidebar');
+    this.feedBtn = iconButton(ICONS.feed, tr('Feed de atividade ( ] )'), () => ctx.togglePanel('feed'), 'ui-btn-feed');
+    this.timelapseBtn = iconButton(TIMELAPSE_ICONS.timelapse, tr('Timelapse: reproduzir o dia (L)'), () => ctx.toggleTimelapse(), 'ui-btn-timelapse');
+    this.settingsBtn = iconButton(ICONS.settings, tr('Configurações'), () => ctx.toggleSettings());
     this.settingsBtn.setAttribute('aria-haspopup', 'dialog');
+    this.spawnPanel = new SpawnPanel(ctx);
+    ctx.root.append(this.spawnPanel.el);
+    this.spawnBtn = iconButton(ICONS.newAgent, tr('Novo agente: começa uma sessão do Claude Code no computador'), () => this.spawnPanel.toggle(this.spawnBtn), 'ui-btn-spawn');
+    this.spawnBtn.setAttribute('aria-haspopup', 'dialog');
+    this.spawnBtn.hidden = true;
     this.version = new VersionChip(ctx, this.settingsBtn);
     const viewGroup = h(
       'div',
-      { class: 'ui-btn-group', role: 'group', attrs: { 'aria-label': 'Câmera' } },
-      iconButton(ICONS.overview, 'Visão geral (O)', () => ctx.camera('overview')),
-      iconButton(ICONS.zoomOut, 'Afastar (−)', () => ctx.camera('zoomOut')),
-      iconButton(ICONS.zoomIn, 'Aproximar (+)', () => ctx.camera('zoomIn')),
+      { class: 'ui-btn-group', role: 'group', attrs: { 'aria-label': tr('Câmera') } },
+      iconButton(ICONS.overview, tr('Visão geral (O)'), () => ctx.camera('overview')),
+      iconButton(ICONS.zoomOut, tr('Afastar (−)'), () => ctx.camera('zoomOut')),
+      iconButton(ICONS.zoomIn, tr('Aproximar (+)'), () => ctx.camera('zoomIn')),
     );
     const panelGroup = h(
       'div',
-      { class: 'ui-btn-group', role: 'group', attrs: { 'aria-label': 'Painéis' } },
+      { class: 'ui-btn-group', role: 'group', attrs: { 'aria-label': tr('Painéis') } },
+      this.spawnBtn,
       this.timelapseBtn,
       this.feedBtn,
       this.settingsBtn,
-      iconButton(ICONS.help, 'Ajuda (?)', () => ctx.openHelp()),
+      iconButton(ICONS.help, tr('Ajuda (?)'), () => ctx.openHelp()),
     );
     this.panelGroup = panelGroup;
 
@@ -149,16 +160,16 @@ export class TopBar implements UiComponent {
     const conn = store.connection;
     if (conn === 'open') this.hadOpen = true;
     const label =
-      conn === 'open' ? 'Conectado' : conn === 'mock' ? 'Simulação' : conn === 'closed' ? 'Desconectado' : this.hadOpen ? 'Reconectando…' : 'Conectando…';
+      conn === 'open' ? tr('Conectado') : conn === 'mock' ? tr('Simulação') : conn === 'closed' ? tr('Desconectado') : this.hadOpen ? tr('Reconectando…') : tr('Conectando…');
     setText(this.pillText, label);
     setVariant(this.pill, 'is-', conn);
     setTitle(
       this.pill,
       conn === 'mock'
-        ? 'Dados simulados no navegador (?mock=1)'
+        ? tr('Dados simulados no navegador (?mock=1)')
         : conn === 'open'
-          ? 'Recebendo eventos do servidor em tempo real'
-          : 'Sem conexão com o servidor do Habblaud',
+          ? tr('Recebendo eventos do servidor em tempo real')
+          : tr('Sem conexão com o servidor do Habblaud'),
     );
     setHidden(this.demoBadge, !(conn === 'open' && snap?.meta.demo));
 
@@ -175,19 +186,20 @@ export class TopBar implements UiComponent {
     const waiting = this.counters.get('waiting')!.el as HTMLButtonElement;
     waiting.classList.toggle('is-active', c.waiting > 0);
     waiting.disabled = c.waiting === 0;
-    // Pedidos que dá para responder por aqui (hook de permissão): a dica diz quantos.
+    // Pedidos que dá para responder por aqui (hook de permissão: permissões e perguntas): a dica diz quantos.
     const answerable = permissionAgents(snap?.agents ?? []).length;
     waiting.classList.toggle('has-answer', answerable > 0);
     setTitle(
       waiting,
       answerable
-        ? `${WAITING_HINT}. ${answerable === 1 ? '1 pedido de permissão dá' : `${answerable} pedidos de permissão dão`} para responder por aqui: clique para ir até ${answerable === 1 ? 'ele' : 'cada um'} (P).`
-        : `${WAITING_HINT}. Clique para ir até o primeiro.`,
+        ? tr('{0}. {1} para responder por aqui: clique para ir até {2} (P).', [WAITING_HINT, answerable === 1 ? tr('1 pedido (permissão ou pergunta) dá') : tr('{0} pedidos (permissões ou perguntas) dão', [answerable]), answerable === 1 ? tr('ele') : tr('cada um')])
+        : tr('{0}. Clique para ir até o primeiro.', [WAITING_HINT]),
     );
     this.renderShells(c.shells, now);
 
     this.usage.render();
     this.version.render();
+    setHidden(this.spawnBtn, !access().spawn || store.mock || store.replaying);
 
     this.sidebarBtn.setAttribute('aria-pressed', String(this.ctx.isPanelOpen('sidebar')));
     this.feedBtn.setAttribute('aria-pressed', String(this.ctx.isPanelOpen('feed')));
@@ -206,15 +218,15 @@ export class TopBar implements UiComponent {
     const agents = shellWaitingAgents(all, now);
     setText(refs.value, formatInt(n));
     setText(refs.label, n === 1 ? 'shell' : 'shells');
-    const who = agents.length === 1 ? agents[0].name : `${formatInt(agents.length)} agentes`;
-    setAttr(refs.el, 'aria-label', `${formatInt(n)} ${n === 1 ? 'shell rodando' : 'shells rodando'}; ${who} esperando. Ir até o próximo.`);
+    const who = agents.length === 1 ? agents[0].name : tr('{0} agentes', [formatInt(agents.length)]);
+    setAttr(refs.el, 'aria-label', tr('{0} {1}; {2} esperando. Ir até o próximo.', [formatInt(n), n === 1 ? tr('shell rodando') : tr('shells rodando'), who]));
     // Dica: quem espera o quê, do que espera há mais tempo.
     const lines = agents.slice(0, 6).map((a) => {
       const w = shellWaitIn(a, all, now)!;
       return `${a.name}: ${shellLine(w, now).label} (${formatDuration(now - w.since)})`;
     });
-    if (agents.length > 6) lines.push(`… e mais ${agents.length - 6}`);
-    setTitle(refs.el, `Shells rodando: ${agents.length === 1 ? 'o agente espera' : 'os agentes esperam'} terminar.\n${lines.join('\n')}\nClique para ir até ${agents.length > 1 ? 'cada um' : 'ele'}.`);
+    if (agents.length > 6) lines.push(tr('… e mais {0}', [agents.length - 6]));
+    setTitle(refs.el, tr('Shells rodando: {0} terminar.\n{1}\nClique para ir até {2}.', [agents.length === 1 ? tr('o agente espera') : tr('os agentes esperam'), lines.join('\n'), agents.length > 1 ? tr('cada um') : tr('ele')]));
   }
 
   private focusNextShell(): void {

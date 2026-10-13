@@ -13,9 +13,11 @@ import {
   StatsBook,
   StatsTracker,
   MAX_GAP_MS,
+  MAX_WAITS_PER_DAY,
   MIN_WAIT_MS,
   SETTLE_MS,
   type StatsView,
+  type WaitRecord,
 } from './daystats';
 import { seedDemoHistory } from './demo/daystats';
 import { DEMO_PROJECT_NAMES } from './demo/simulator';
@@ -313,6 +315,38 @@ describe('StatsTracker: contagens a partir dos números cumulativos', () => {
     tracker.observe(view(agent({ id: 'a', recent: [...recent, prompt('p2', T0 + 4 * S)] })), T0 + 5 * S);
     tracker.observe(view(agent({ id: 'a', recent: [...recent, prompt('p2', T0 + 4 * S)] })), T0 + 6 * S);
     expect(day().totals.counts.prompts).toBe(2);
+  });
+});
+
+describe('limite de esperas por dia', () => {
+  const wait = (i: number, over: Partial<WaitRecord> = {}): WaitRecord => ({ agentId: `a${i}`, agentName: 'A', roomId: '/p/x', account: 'c', start: T0 + i, end: T0 + i + 1_000 + i, ...over });
+
+  it('esperas fechadas: sai a mais curta e o total fica no limite', () => {
+    const book = new StatsBook((t) => dayKeyOf(t, 'UTC'));
+    const day = book.day(DAY);
+    for (let i = 0; i < MAX_WAITS_PER_DAY + 20; i++) book.addWait(wait(i));
+    expect(day.waits).toHaveLength(MAX_WAITS_PER_DAY);
+    expect(day.waits.some((w) => w.agentId === 'a0')).toBe(false); // a mais curta saiu
+    expect(day.waits.some((w) => w.agentId === `a${MAX_WAITS_PER_DAY + 19}`)).toBe(true); // a mais longa ficou
+  });
+
+  it('todas ainda abertas: o limite vale do mesmo jeito (sai a mais curta)', () => {
+    const book = new StatsBook((t) => dayKeyOf(t, 'UTC'));
+    const day = book.day(DAY);
+    for (let i = 0; i < MAX_WAITS_PER_DAY + 50; i++) book.addWait(wait(i, { open: true }));
+    expect(day.waits).toHaveLength(MAX_WAITS_PER_DAY);
+    expect(day.waits.some((w) => w.agentId === 'a0')).toBe(false);
+    expect(day.waits.some((w) => w.agentId === `a${MAX_WAITS_PER_DAY + 49}`)).toBe(true);
+  });
+
+  it('uma espera aberta nova que é a mais curta de todas não entra', () => {
+    const book = new StatsBook((t) => dayKeyOf(t, 'UTC'));
+    const day = book.day(DAY);
+    for (let i = 0; i < MAX_WAITS_PER_DAY; i++) book.addWait(wait(i + 10, { open: true }));
+    const tiny = wait(0, { open: true, end: T0 + 1 });
+    book.addWait(tiny);
+    expect(day.waits).toHaveLength(MAX_WAITS_PER_DAY);
+    expect(day.waits).not.toContain(tiny);
   });
 });
 

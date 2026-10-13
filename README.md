@@ -1,82 +1,86 @@
 <p align="center">
-  <img src="client/public/assets/brand/logo-mark@4x.png" width="96" alt="Logo do Habblaud: um pequeno prédio em pixel art" />
+  <img src="client/public/assets/brand/logo-mark@4x.png" width="96" alt="Habblaud logo: a small pixel-art building" />
 </p>
 
 <h1 align="center">Habblaud</h1>
 
 <p align="center">
-  <b>O escritório virtual dos seus agentes do Claude Code.</b><br />
-  Cada projeto vira uma sala, cada agente vira um personagem em pixel art que mostra, em tempo real, o que está fazendo.
+  <b>The virtual office for your Claude Code (and Codex and OpenCode) agents.</b><br />
+  Each project becomes a room, and each agent becomes a pixel-art character that shows, in real time, what it's doing.
 </p>
+
+<p align="center"><b>English</b> · <a href="README.pt-BR.md">Português</a> · <a href="README.es.md">Español</a> · <a href="README.fr.md">Français</a></p>
 
 <p align="center">
   <img alt="Node.js 22.12+" src="https://img.shields.io/badge/node-%E2%89%A522.12-5fa04e?logo=node.js&logoColor=white" />
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-7-3178c6?logo=typescript&logoColor=white" />
-  <img alt="Docker" src="https://img.shields.io/badge/Docker-pronto-2496ed?logo=docker&logoColor=white" />
-  <img alt="Zero dependências de runtime" src="https://img.shields.io/badge/depend%C3%AAncias%20de%20runtime-0-f08a3c" />
-  <img alt="Interface em português" src="https://img.shields.io/badge/interface-PT--BR-4aa8e8" />
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-ready-2496ed?logo=docker&logoColor=white" />
+  <img alt="Zero runtime dependencies" src="https://img.shields.io/badge/runtime%20dependencies-0-f08a3c" />
+  <img alt="Interface in Portuguese, English, Spanish and French" src="https://img.shields.io/badge/interface-PT%20%C2%B7%20EN%20%C2%B7%20ES%20%C2%B7%20FR-4aa8e8" />
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/office.gif" width="820" alt="Animação de uma sala do Habblaud: personagens digitando nas mesas, subagentes com crachá e balões de atividade" />
+  <img src="docs/screenshots/office.gif" width="820" alt="Animation of a Habblaud room: characters typing at their desks, subagents with badges and activity bubbles" />
 </p>
 
 ---
 
-Você abre o Claude Code em vários projetos, dispara subagentes, deixa tarefas rodando… e perde a noção de quem está
-fazendo o quê. O **Habblaud** transforma isso num escritório que dá para entender de relance: quem está digitando,
-quem levantou a mão porque **precisa de você**, quem entregou o trabalho e foi embora, quem foi tomar um café
-enquanto espera a próxima instrução — e quanto de cada conta você já gastou na sessão de 5 horas e na semana.
+You open Claude Code in several projects, launch subagents, leave tasks running… and lose track of who's doing
+what. **Habblaud** turns all of that into an office you can take in at a glance: who's typing, who raised a hand
+because they **need you**, who delivered their work and left, who went for a coffee while waiting for the next
+instruction — and how much of each account you've already used in the 5-hour session and in the week.
 
-E quando dois ou mais agentes estão à toa, o escritório ganha **vida social**: cada um tem personalidade própria, e
-eles veem futebol juntos no lounge, jogam videogame e ping-pong, fofocam na copa, se arrumam no espelho e apostam
-moedinhas no jokenpô. Veja em [Vida social](#vida-social).
+And when two or more agents have nothing to do, the office gets a **social life**: each one has its own personality,
+and they watch soccer together in the lounge, play video games and ping-pong, gossip in the kitchen, freshen up at the
+mirror and bet coins on rock-paper-scissors. See [Social life](#social-life).
 
-Tudo roda na sua máquina, lendo os arquivos que o próprio Claude Code já grava (e só as linhas `alias` do seu shell,
-para dar a letra de cada conta). Nada sai do computador: o Habblaud não lê credenciais nem faz chamadas externas.
+Everything runs on your machine, reading the files Claude Code itself already writes (plus only the `alias` lines in
+your shell, to give each account its letter). Nothing leaves the computer: Habblaud doesn't read credentials or make
+external calls.
 
-## Sumário
+## Contents
 
-- [Como é](#como-é)
-- [Instalação](#instalação)
-- [Como usar](#como-usar)
-- [Contas e uso (5 horas e semanal)](#contas-e-uso-5-horas-e-semanal)
-- [Configuração](#configuração)
-- [Como funciona](#como-funciona)
-- [Privacidade e segurança](#privacidade-e-segurança)
-- [Desenvolvimento](#desenvolvimento)
-- [Solução de problemas](#solução-de-problemas)
-- [Aviso](#aviso)
-- [Licença](#licença)
-- [Vida social](#vida-social)
+- [What it looks like](#what-it-looks-like)
+- [Installation](#installation)
+- [How to use](#how-to-use)
+- [Accounts and usage (5-hour and weekly)](#accounts-and-usage-5-hour-and-weekly)
+- [Configuration](#configuration)
+- [How it works](#how-it-works)
+- [Privacy and security](#privacy-and-security)
+- [Development](#development)
+- [Troubleshooting](#troubleshooting)
+- [Disclaimer](#disclaimer)
+- [License](#license)
+- [Social life](#social-life)
 
-## Como é
+## What it looks like
 
-**Visão geral.** O prédio tem recepção com elevadores, copa, banheiros e lounge; cada projeto com uma sessão aberta
-ganha a sua sala ao longo do corredor. No topo, os contadores e o uso de cada conta; à esquerda, as salas e os
-agentes; embaixo, o feed de atividade.
+**Overview.** The building has a lobby with elevators, a kitchen, restrooms and a lounge; each project with an open
+session gets its own room along the hallway. At the top, the counters and each account's usage; on the left, the rooms
+and agents; at the bottom, the activity feed.
 
-![Visão geral do Habblaud: prédio com recepção, copa, banheiros, lounge e salas de projeto; barra lateral com salas e agentes; uso das contas no topo; feed de atividade embaixo](docs/screenshots/overview.png)
+![Habblaud overview: building with lobby, kitchen, restrooms, lounge and project rooms; sidebar with rooms and agents; account usage at the top; activity feed at the bottom](docs/screenshots/overview.png)
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/agent-details.png" alt="Gaveta de detalhes de um agente com tarefas, subagentes, linha do tempo e estatísticas" /></td>
-    <td width="50%"><img src="docs/screenshots/night.png" alt="O escritório à noite, com postes acesos e salas iluminadas" /></td>
+    <td width="50%"><img src="docs/screenshots/agent-details.png" alt="Details drawer of an agent with tasks, subagents, timeline and stats" /></td>
+    <td width="50%"><img src="docs/screenshots/night.png" alt="The office at night, with streetlights on and lit rooms" /></td>
   </tr>
   <tr>
-    <td><b>Detalhes do agente:</b> atividade atual, tarefas com progresso, subagentes, linha do tempo e estatísticas.</td>
-    <td><b>Dia e noite:</b> o céu nas janelas e a iluminação seguem a hora local.</td>
+    <td><b>Agent details:</b> current activity, tasks with progress, subagents, timeline and stats.</td>
+    <td><b>Day and night:</b> the sky in the windows and the lighting follow local time.</td>
   </tr>
 </table>
 
 <table>
   <tr>
-    <td width="42%"><img src="docs/screenshots/collab.png" alt="Subagente entregando o resultado ao agente principal enquanto outra agente pede permissão" /></td>
+    <td width="42%"><img src="docs/screenshots/collab.png" alt="Subagent delivering the result to the main agent while another agent asks for permission" /></td>
     <td width="58%">
-      <b>Colaboração à vista.</b> Subagentes são colegas com nome próprio e crachá: chegam pelo elevador, trabalham na
-      sala do projeto e, ao terminar, vão até o agente que os chamou entregar o resultado (📦) antes de ir embora.<br /><br />
-      <b>Precisa de você.</b> Quando um agente espera uma permissão ou resposta no terminal, ele corre para a mesa e
-      levanta a mão, com um alerta piscando — e um aviso aparece na tela (opcionalmente com som e notificação do navegador).
+      <b>Collaboration in plain sight.</b> Subagents are coworkers with their own names and badges: they arrive by elevator, work in
+      the project's room and, when they finish, walk over to the agent that called them to deliver the result (📦) before leaving.<br /><br />
+      <b>Needs you.</b> When an agent is waiting for a permission or an answer in the terminal, it rushes to its desk and
+      raises a hand, with a blinking alert — and a notice pops up on screen (optionally with sound and a browser notification).
+      You can approve, answer the question or send the next instruction right there.
     </td>
   </tr>
 </table>
@@ -84,49 +88,50 @@ agentes; embaixo, o feed de atividade.
 <table>
   <tr>
     <td width="58%">
-      <b>Esperando o shell.</b> Quando o agente termina o turno mas deixa um comando rodando (testes, build,
-      deploy…), ele não sai para passear: fica na mesa com uma ampulheta virando sobre a cabeça, o terminal mostrando
-      o progresso e um balão com o comando e o tempo. E a espera vira comédia: primeiro ele come pipoca assistindo ao
-      terminal; depois de 3 min cruza os braços e gira na cadeira; depois de 10 min junta teia de aranha; depois de
-      25 min cochila. Quando o comando termina, levanta e comemora com confete — ou ganha uma nuvem de chuva, se
-      falhou. Na lista lateral e nos detalhes, um cronômetro mostra há quanto tempo cada comando está rodando.
+      <b>Waiting on shell.</b> When the agent finishes its turn but leaves a command running (tests, build,
+      deploy…), it doesn't wander off: it stays at its desk with an hourglass flipping over its head, the terminal showing
+      progress and a bubble with the command and the elapsed time. And the wait turns into comedy: first it eats popcorn watching the
+      terminal; after 3 min it crosses its arms and spins in its chair; after 10 min it gathers cobwebs; after
+      25 min it dozes off. When the command finishes, it stands up and celebrates with confetti — or gets a rain cloud, if
+      it failed. In the sidebar list and in the details, a timer shows how long each command has been running.
     </td>
-    <td width="42%"><img src="docs/screenshots/shell-wait.png" alt="Agente comendo pipoca na mesa, com uma ampulheta sobre a cabeça e o balão 'Rodar a suíte de testes · 1 min'; na fileira da frente, uma colega espera há mais tempo, com teia de aranha na cadeira e o terminal mostrando o progresso" /></td>
+    <td width="42%"><img src="docs/screenshots/shell-wait.png" alt="Agent eating popcorn at its desk, with an hourglass over its head and the bubble 'Run the test suite · 1 min'; in the front row, a coworker has been waiting longer, with cobwebs on the chair and the terminal showing progress" /></td>
   </tr>
 </table>
 
-**A luz apaga.** Quando você fecha a última sessão de um projeto, o último personagem vai até o interruptor,
-apaga a luz, sai pelo elevador — e a sala é desmontada, virando jardim até um novo projeto chegar. Se o jardim
-ficou entre duas salas, a sala mais distante se muda para lá: é montada no lugar vago, o pessoal vai andando até
-ela, e o endereço antigo apaga e é desmontado. Assim o prédio não fica com buracos e encolhe sozinho.
+**The lights go out.** When you close a project's last session, the last character walks to the light switch,
+turns off the lights and leaves by elevator — and the room is taken apart, becoming a garden until a new project
+arrives. If the garden ended up between two rooms, the farthest room moves there: it's set up in the empty spot,
+everyone walks over to it, and the old address goes dark and is taken apart. That way the building has no gaps and
+shrinks on its own.
 
-| 1. A sala é montada, ainda apagada | 2. Alguém acende a luz e todos trabalham | 3. O último sai e apaga a luz | 4. A sala vira jardim |
+| 1. The room is set up, still dark | 2. Someone turns on the lights and everyone works | 3. The last one leaves and turns off the lights | 4. The room becomes a garden |
 | --- | --- | --- | --- |
-| ![Sala sendo montada, com os móveis aparecendo e a luz apagada](docs/screenshots/lifecycle-1.png) | ![Sala acesa com três agentes trabalhando nas mesas](docs/screenshots/lifecycle-2.png) | ![Sala com a luz apagada e os móveis ainda no lugar, depois que todos saíram](docs/screenshots/lifecycle-3.png) | ![O lote da sala transformado em jardim](docs/screenshots/lifecycle-4.png) |
+| ![Room being set up, with the furniture appearing and the lights off](docs/screenshots/lifecycle-1.png) | ![Lit room with three agents working at their desks](docs/screenshots/lifecycle-2.png) | ![Room with the lights off and the furniture still in place, after everyone left](docs/screenshots/lifecycle-3.png) | ![The room's lot turned into a garden](docs/screenshots/lifecycle-4.png) |
 
 <table>
   <tr>
-    <td width="34%"><img src="docs/screenshots/mobile.png" alt="Habblaud no celular, com o uso das contas no topo" /></td>
+    <td width="34%"><img src="docs/screenshots/mobile.png" alt="Habblaud on a phone, with account usage at the top" /></td>
     <td>
-      <b>Também no celular.</b> A interface se adapta a telas pequenas: o uso das contas fica no topo, a lista de
-      salas vira uma gaveta e os detalhes abrem de baixo para cima. Veja como liberar o acesso pela rede local em
-      <a href="#abrir-no-celular-opcional">Abrir no celular</a>.
+      <b>On your phone too.</b> The interface adapts to small screens: account usage stays at the top, the room list
+      becomes a drawer and the details open from the bottom up. See how to allow access over the local network in
+      <a href="#open-on-your-phone-optional">Open on your phone</a>.
     </td>
   </tr>
 </table>
 
-> As imagens acima usam o **modo demonstração** (projetos, pessoas e contas fictícios).
+> The images above use **demo mode** (made-up projects, people and accounts).
 
-## Instalação
+## Installation
 
-### Requisitos
+### Requirements
 
-- **macOS** (testado) ou Linux.
-- **[Claude Code](https://code.claude.com)** instalado, com uma ou mais contas (2.1.287 ou mais novo para o mod).
-- **Node.js 22.12+** e **npm** (desenvolvido com o Node 24; o Docker já usa o Node 24).
-- **Docker Desktop** (ou Docker Engine com Compose v2), se for rodar em container.
+- **macOS** (tested) or Linux.
+- **[Claude Code](https://code.claude.com)** installed, with one or more accounts (2.1.287 or newer for the mod).
+- **Node.js 22.12+** and **npm** (developed with Node 24; Docker already uses Node 24).
+- **Docker Desktop** (or Docker Engine with Compose v2), if you're going to run it in a container.
 
-### 1. Baixe o projeto
+### 1. Get the project
 
 ```bash
 git clone https://github.com/marmottajr/habblaud.git
@@ -134,97 +139,181 @@ cd habblaud
 npm install
 ```
 
-> O `npm install` só baixa ferramentas de compilação (Vite, TypeScript, tsx…). O servidor do Habblaud não tem
-> dependências de runtime: usa só módulos nativos do Node.
+> `npm install` only downloads build tools (Vite, TypeScript, tsx…). The Habblaud server has no
+> runtime dependencies: it only uses Node's built-in modules.
 
-### 2. Suba o Habblaud
+### 2. Start Habblaud
 
-**Opção A — Docker (recomendado para deixar sempre ligado)**
+**Option A — Docker (recommended for keeping it always on)**
 
 ```bash
 npm run docker:up
 ```
 
-O script detecta as suas contas do Claude Code, monta só as pastas necessárias (em modo somente leitura), constrói
-a imagem e sobe o container — que reinicia sozinho junto com o Docker. Abra **http://localhost:4747**.
+The script detects your Claude Code accounts, mounts only the folders it needs (read-only), builds
+the image and starts the container — which restarts on its own along with Docker. Open **http://localhost:4747**.
 
-**Opção B — Node, sem Docker**
+**Option B — Node, without Docker**
 
 ```bash
 npm run build
 npm start
 ```
 
-Abra **http://localhost:4747**. Para desenvolver, use `npm run dev` (servidor + Vite com recarga automática).
+Open **http://localhost:4747**. For development, use `npm run dev` (server + Vite with hot reload).
 
-Agora abra o Claude Code em qualquer projeto e veja o seu agente chegar pelo elevador. 🎉
+Now open Claude Code in any project and watch your agent arrive by elevator. 🎉
 
-### 3. Instale o mod do Habblaud no Claude Code (recomendado)
+### 3. Install the Habblaud mod in Claude Code (recommended)
 
 ```bash
-npm run mod:install                        # o mod e o plugin de permissões, em cada conta
-npm run mod:install -- --sem-permissoes    # só o mod, sem responder permissões pelo escritório
+npm run mod:install                        # o mod e os plugins de permissões e de mensagens, em cada conta
+npm run mod:install -- --sem-permissoes    # sem responder permissões e perguntas pelo escritório
+npm run mod:install -- --sem-mensagens     # sem mandar mensagens aos agentes pelo escritório
 ```
 
-O Habblaud traz um [mod](https://code.claude.com/docs/en/plugins/mods/overview) (um plugin que roda dentro do
-Claude Code) e o instala em cada conta, pelo próprio `claude plugin`, a partir desta pasta. Com ele:
+Habblaud ships a [mod](https://code.claude.com/docs/en/plugins/mods/overview) (a plugin that runs inside
+Claude Code) and installs it in each account, through `claude plugin` itself, from this folder. With it:
 
-- o **uso de 5 horas e semanal** de cada conta aparece ao vivo no Habblaud;
-- o terminal mostra uma linha quando **outra sessão precisa de você** (permissão ou resposta);
-- o comando **`/habblaud`** passa a existir no Claude Code;
-- dá para **aprovar ou recusar pelo escritório** os pedidos de permissão ("Do you want to…"), com o plugin
-  `habblaud-permissoes` (veja [Responder pelo escritório](#responder-pelo-escritório)).
+- each account's **5-hour and weekly usage** shows up live in Habblaud;
+- the terminal shows a line when **another session needs you** (permission or answer);
+- the **`/habblaud`** command becomes available in Claude Code;
+- you can **approve or deny permission requests from the office** ("Do you want to…") and **answer the agent's
+  questions**, with the `habblaud-permissoes` plugin (see [Answering from the office](#answering-from-the-office));
+- you can **send messages** to the agent from the office, as if you were typing in its terminal, with the
+  `habblaud-mensagens` plugin (see [Sending messages](#sending-messages)).
 
-Precisa do **Claude Code 2.1.287 ou mais novo** (`claude --version`). O mod roda dentro de cada sessão, com as suas
-permissões, e acessa só o que está listado em [`mod/README.md`](mod/README.md); para conferir sem rodar nada,
-`claude plugin validate mod/habblaud` mostra os eventos que ele trata e as chamadas que faz. Sessões já abertas
-carregam o mod com `/reload-plugins` (ou ao reabrir). Se a conta tinha o jeito antigo (abaixo), o `mod:install` tira o
-tap e o hook do `settings.json` (com backup), porque o mod faz o mesmo. Confira com `npm run mod:status`; para
-desfazer: `npm run mod:uninstall`.
+It requires **Claude Code 2.1.287 or newer** (`claude --version`). The mod runs inside each session, with your
+permissions, and only accesses what is listed in [`mod/README.md`](mod/README.md); to check without running anything,
+`claude plugin validate mod/habblaud` shows the events it handles and the calls it makes. Sessions that are already open
+load the mod with `/reload-plugins` (or when reopened). If the account had the old setup (below), `mod:install` removes the
+tap and the hook from `settings.json` (with a backup), because the mod does the same thing. Check with `npm run mod:status`; to
+undo: `npm run mod:uninstall`.
 
-> O mod é lido desta pasta. Se mover a pasta, rode `npm run mod:install` de novo.
+> The mod is loaded from this folder. If you move the folder, run `npm run mod:install` again.
 
 <details>
-<summary><b>Claude Code anterior ao 2.1.287: o jeito antigo</b></summary>
+<summary><b>Claude Code older than 2.1.287: the old way</b></summary>
 
-Sem mods, o uso ao vivo e o responder pelo escritório vêm de dois instaladores que editam o `settings.json` de cada
-conta (com backup antes):
+Without mods, live usage and answering from the office come from two installers that edit each account's
+`settings.json` (with a backup first):
 
 ```bash
 npm run usage:install    # põe um "tap" na frente do statusline de cada conta, que captura o uso de 5h/semanal
 npm run hooks:install    # acrescenta o hook PermissionRequest, para responder permissões pelo escritório
 ```
 
-O seu statusline continua aparecendo igual. Para desfazer: `npm run usage:uninstall` e `npm run hooks:uninstall`.
-Os dois apontam para esta pasta: se mover a pasta, rode-os de novo (até lá, o statusline das contas mostra erro).
-Quando atualizar o Claude Code, troque pelo mod: o `npm run mod:install` tira o tap e o hook antigos (com backup) para
-não ficarem dois capturando o uso ou respondendo o mesmo pedido.
+Your statusline keeps looking the same. To undo: `npm run usage:uninstall` and `npm run hooks:uninstall`.
+Both point to this folder: if you move the folder, run them again (until then, the accounts' statusline shows an error).
+When you update Claude Code, switch to the mod: `npm run mod:install` removes the old tap and hook (with a backup) so
+you don't end up with two of them capturing usage or answering the same request.
 
 </details>
 
-### Abrir no celular (opcional)
+### 4. Codex in the office (optional)
 
-Por padrão o Habblaud só aceita conexões do próprio computador. Para abrir no celular (no mesmo Wi-Fi), com Docker:
+If you also use OpenAI's **Codex** (the `codex` CLI or the app), its sessions join the same office: each
+project is a room — the same room as Claude Code, when both are open in the same project — and each session is a
+character with the **CODEX** tag. Habblaud finds the Codex folder on its own (`~/.codex`, `CODEX_HOME` or `~/.codex*`) and
+reads the conversations, without installing anything. To see Codex **live** (what it's doing right now, who needs you) and
+approve commands from the office, install the hooks:
+
+```bash
+npm run codex:install      # acrescenta os hooks do Habblaud em ~/.codex/hooks.json (backup antes; os outros ficam)
+npm run codex:status       # confere
+```
+
+Then **open Codex and approve the Habblaud hooks in `/hooks`**: Codex only runs a new hook after you
+approve it (Habblaud never writes that approval). With Habblaud in Docker, to send messages to Codex sessions,
+also keep `npm run codex:bridge` running on the Mac (see [Codex](#codex)).
+
+### 5. OpenCode in the office (optional)
+
+If you also use **OpenCode**, its sessions show up in the same office: each project is a room and each session is a
+character on the **OpenCode** account. Habblaud finds OpenCode's database (`~/.local/share/opencode/opencode.db`) and reads
+it **read-only**, without installing anything. This needs **Node 22.13 or newer** (that's when `node:sqlite` works
+without an extra flag): on Node 22.12 the reading stays off, Habblaud says so with one line in the log and everything
+else works as usual. **In Docker this reading doesn't exist:** the container can't see OpenCode's database (`docker:up`
+deliberately mounts no SQLite file). To see OpenCode, run Habblaud without Docker (Node mode). See
+[OpenCode](#opencode).
+
+### Open on your phone (optional)
+
+By default Habblaud only accepts connections from the computer it runs on. To open it on your phone (on the same Wi-Fi), with Docker:
 
 ```bash
 printf 'HABBLAUD_BIND=0.0.0.0\n' > .env
 npm run docker:up -- --no-build
 ```
 
-Depois abra `http://<ip-do-computador>:4747` no celular (no macOS: `ipconfig getifaddr en0`; se vier vazio,
-`ipconfig getifaddr en1`). No modo Node, use `HABBLAUD_HOST=0.0.0.0 npm start`.
+Then open `http://<ip-do-computador>:4747` on your phone (on macOS: `ipconfig getifaddr en0`; if it comes back empty,
+`ipconfig getifaddr en1`). In Node mode, use `HABBLAUD_HOST=0.0.0.0 npm start`.
 
-> ⚠️ Com isso, qualquer aparelho da rede vê a atividade dos agentes (comandos, arquivos, títulos das sessões). Use
-> só em redes de confiança. O [terminal somente leitura](#terminal-somente-leitura) fica desligado enquanto a porta
-> estiver exposta. Para voltar: apague o `.env` e rode `npm run docker:up -- --no-build`.
+> ⚠️ With this, any device on the network can see the agents' activity (commands, files, session titles). Use it
+> only on trusted networks. The [terminal](#terminal) (and with it, answering and sending messages from the office) stays
+> off while the port is exposed. To go back: delete `.env` and run `npm run docker:up -- --no-build`.
 
-### Atualizar
+#### Phone with login and HTTPS (approving requests)
 
-A versão em uso aparece na barra superior, ao lado de "Conectado", e em **Configurações › Sobre**. A cada 6 horas o
-Habblaud confere no GitHub se saiu uma versão nova (as [releases](https://github.com/marmottajr/habblaud/releases)
-deste repositório). Quando sai, aparece o selo verde **Nova versão** no lugar do número, com um aviso e um ponto no
-botão de configurações. Em **Sobre** ficam o link do que mudou e o botão **Verificar agora** (as notas de cada
-versão também estão no [`CHANGELOG.md`](CHANGELOG.md)). Para atualizar:
+Instead of exposing the main port, open a **second port with a username, a password and HTTPS**. Port 4747 stays on the
+computer only (hooks, plugins and your browser keep working without a login); the remote port goes to the network and
+every request on it requires a login. What separates the two is the port the connection arrived on, never the Host
+header. Nothing of this exists until you run the setup: without it, no extra port is published.
+
+```bash
+npm run remote:setup   # usuário, senha, nome do endereço e (opcional) um endereço próprio
+npm run docker:up
+```
+
+`remote:setup` writes only the password **hash** (scrypt) to `.env`, creates a local CA and the server certificate in
+`~/.habblaud/remote-tls`, and leaves a service announcing `<nome>.local` on the network (mDNS; LaunchAgent on macOS,
+systemd on Linux). Open `https://<nome>.local` on your phone (with `:4748` if port 443 was taken). The first time,
+accept the warning, tap **Install the Habblaud certificate** and trust it (iPhone: Settings › Profile Downloaded ›
+Install, then Settings › General › About › Certificate Trust Settings; Android: Security › Encryption & credentials ›
+Install a certificate › CA certificate), checking the fingerprint the setup showed.
+
+- **Restricted CA:** it only signs `localhost`, `.local` names, your own address and private-network IPs. Even if its
+  key leaked, a certificate for any other site would be rejected by the phone that trusts it. Changing your own
+  address creates a new CA (install the certificate on the phone again). The CA key never goes into the container.
+- **Own address** (e.g. `meuclaude.home`): goes into the certificate, but the phone only finds it with an entry in the
+  router's DNS pointing to the computer's IP. `<nome>.local` works without configuring anything.
+- **What the phone can do:** by default, approve and deny permission requests. `HABBLAUD_REMOTE_ALLOW` in `.env`
+  accepts `permissions`, `messages`, `terminal` and `spawn`, separated by commas, or `none` (view only). The
+  interactive terminal never works from the phone.
+- **Deliveries** (phone, with `terminal` allowed): the box button in the top bar lists what each agent finished, with
+  a summary and attachments (screenshots, PDFs, files it sent) that open with a tap.
+- **New agent** (the **+** button): starts a Claude Code session in the background on the computer (`claude --bg`, in
+  the chosen folder), which shows up in the office and receives messages and permission requests through Habblaud. In
+  a folder Claude Code doesn't trust yet, it opens the Claude app's new-session screen filled in, and you press Enter
+  there. **It comes turned off:** it needs `HABBLAUD_PTY=1` (the same opt-in as the
+  [interactive terminal](#interactive-terminal-take-over-new-session-and-end); in Docker, put it in `.env` and keep
+  `npm run codex:bridge` running on the computer) and, from the phone, `spawn` in `HABBLAUD_REMOTE_ALLOW` too.
+- **Dictation** (in New agent and in the message box): needs `whisper-cli` and `ffmpeg` (`brew install whisper-cpp
+  ffmpeg`) and a multilingual model in `~/.local/share/whisper/` (`ggml-small.bin` gets more right than
+  `ggml-base.bin`; the `.en` ones only understand English). Without them, the Dictate button doesn't show up. The
+  voice never leaves the computer. `HABBLAUD_WHISPER_BIN`, `HABBLAUD_FFMPEG_BIN`, `HABBLAUD_WHISPER_MODEL` and
+  `HABBLAUD_DICTATION_LANGS` (default `pt,en`) adjust it.
+- **Away from home (Tailscale):** with Tailscale on the computer and on the phone, `tailscale serve --bg --https=443
+  https+insecure://127.0.0.1:443` publishes the remote port (with login) only to your devices, with a valid
+  certificate at `https://<computador>.<tailnet>.ts.net`; add that name to `HABBLAUD_ALLOWED_HOSTS`. Always point it at
+  the remote port, never at 4747 (which has no login).
+- **Session:** 30 days; changing the password (running the setup again) ends all of them, and **Settings › Phone
+  access › Sign out** ends the one on that device. After 5 wrong passwords in a row, each new attempt waits from 1 s up to 5 min.
+- **IP changed?** `docker:up` re-issues the server certificate when the new IP is missing or when it's 30 days from
+  expiring, with the same CA (the phone keeps trusting it); the server swaps the certificate without restarting.
+- **Turn off:** `npm run remote:setup -- --off` and `npm run docker:up`.
+
+Without HTTPS the remote port doesn't start; `HABBLAUD_REMOTE_INSECURE_HTTP=1` forces plain HTTP (password and cookie
+in the clear on the network). In Node mode: `HABBLAUD_REMOTE_PORT` and `HABBLAUD_REMOTE_HOST` (default
+`0.0.0.0:4748`) and `HABBLAUD_REMOTE_TLS_DIR` (default `~/.habblaud/remote-tls/server`).
+
+### Updating
+
+The version in use shows up in the top bar, next to "Connected", and in **Settings › About**. Every 6 hours
+Habblaud checks GitHub for a new version (the [releases](https://github.com/marmottajr/habblaud/releases)
+of this repository). When there is one, the green **New version** badge appears in place of the number, along with a notice and a dot on the
+settings button. **About** has the link to what changed and the **Check now** button (each version's notes
+are also in [`CHANGELOG.md`](CHANGELOG.md)). To update:
 
 ```bash
 git pull
@@ -232,13 +321,17 @@ npm install
 npm run docker:up        # ou: npm run build && npm start (e depois npm run mod:install)
 ```
 
-O `docker:up` também atualiza o mod nas contas em que ele já está instalado (nunca instala sozinho) e avisa:
-"Mod atualizado para 0.3.0 na Conta D; sessões abertas: /reload-plugins". No modo Node, rode `npm run mod:install`
-depois de atualizar. Para não consultar o GitHub, use `HABBLAUD_UPDATE_CHECK=0` (no `.env`, para o Docker).
+> If `git pull` stops with "Your local changes to the following files would be overwritten by merge:
+> package-lock.json", run `git checkout -- package-lock.json` and try again: up to 0.4.0, `npm install` changed that
+> file.
 
-#### Vindo do CodeTown
+`docker:up` also updates the mod in the accounts where it's already installed (it never installs it on its own) and tells you:
+"Mod updated to 0.3.0 on Account D; open sessions: /reload-plugins". In Node mode, run `npm run mod:install`
+after updating. To skip checking GitHub, use `HABBLAUD_UPDATE_CHECK=0` (in `.env`, for Docker).
 
-O Habblaud se chamava **CodeTown** até a 0.3.2. Depois do `git pull`, rode uma vez:
+#### Coming from CodeTown
+
+Habblaud was called **CodeTown** up to 0.3.2. After `git pull`, run once:
 
 ```bash
 npm install
@@ -246,273 +339,433 @@ npm run mod:install      # troca o marketplace e os plugins codetown pelos habbl
 npm run docker:up        # tira o container codetown e copia os dados do volume antigo para o novo
 ```
 
-- **Mod:** até o `mod:install`, o Claude Code das contas reclama do marketplace `codetown` (as pastas
-  `mod/codetown*` mudaram de nome). O `docker:up` avisa, mas não troca sozinho.
-- **Docker:** o volume antigo (`codetown_codetown-data`) fica intacto. Depois de conferir que os nomes dos personagens
-  vieram, apague-o com `docker volume rm codetown_codetown-data`, e a imagem antiga com `docker image rm codetown:local`.
-- **Pasta local:** `~/.codetown` vira `~/.habblaud` sozinha (no servidor, no `docker:up` e no `mod:install`).
-- **Navegador:** preferências e moedinhas passam para as chaves novas na primeira vez que a página abre.
-- **Variáveis:** as `CODETOWN_*` não valem mais; renomeie para `HABBLAUD_*` no `.env` (ex.: `HABBLAUD_BIND`). O
-  servidor e o `docker:up` avisam quando acham uma antiga.
-- **Repositório:** agora é `github.com/marmottajr/habblaud` (o GitHub redireciona o endereço antigo). Para acertar o
-  clone: `git remote set-url origin https://github.com/marmottajr/habblaud.git`. A pasta local pode continuar com o
-  nome antigo.
-- Backups do `settings.json` feitos antes da troca continuam com o nome `settings.json.codetown-backup-<data>`.
+- **Mod:** until you run `mod:install`, the accounts' Claude Code complains about the `codetown` marketplace (the
+  `mod/codetown*` folders were renamed). `docker:up` warns you, but doesn't switch it on its own.
+- **Docker:** the old volume (`codetown_codetown-data`) is left untouched. After checking that the characters' names
+  came over, delete it with `docker volume rm codetown_codetown-data`, and the old image with `docker image rm codetown:local`.
+- **Local folder:** `~/.codetown` becomes `~/.habblaud` on its own (in the server, in `docker:up` and in `mod:install`).
+- **Browser:** preferences and coins move to the new keys the first time the page opens.
+- **Variables:** the `CODETOWN_*` ones no longer work; rename them to `HABBLAUD_*` in `.env` (e.g. `HABBLAUD_BIND`). The
+  server and `docker:up` warn you when they find an old one.
+- **Repository:** it's now `github.com/marmottajr/habblaud` (GitHub redirects the old address). To fix your
+  clone: `git remote set-url origin https://github.com/marmottajr/habblaud.git`. The local folder can keep its
+  old name.
+- `settings.json` backups made before the switch keep the name `settings.json.codetown-backup-<data>`.
 
-### Desinstalar
+### Uninstalling
 
 ```bash
-npm run mod:uninstall                       # tira o mod, o plugin de permissões e o marketplace das contas
+npm run mod:uninstall                       # tira o mod, os plugins de permissões e de mensagens e o marketplace
+npm run codex:uninstall                     # tira os hooks do Habblaud do Codex (os outros ficam)
 npm run docker:down                         # para o container
-docker volume rm habblaud_habblaud-data     # apaga os dados do container (nomes, linha do tempo e estatísticas)
+docker volume rm habblaud_habblaud-data     # apaga os dados do container (nomes, salas, linha do tempo e estatísticas)
 docker image rm habblaud:local              # apaga a imagem
-rm -rf ~/.habblaud                          # apaga os dados locais (uso capturado, nomes, linha do tempo e estatísticas)
+rm -rf ~/.habblaud                          # apaga os dados locais (uso capturado, nomes, salas, linha do tempo e estatísticas)
 ```
 
-Depois é só apagar a pasta do projeto — rode o `mod:uninstall` **antes**, senão o Claude Code das contas passa a
-reclamar do marketplace que sumiu. Se você usou o jeito antigo, rode também `npm run usage:uninstall` (devolve o
-statusline original) e `npm run hooks:uninstall` (tira o hook de permissão); sem eles, o statusline das contas passa
-a dar erro (e o hook, a falhar em silêncio). O `mod:install`, que tira o tap e o hook antigos, e os instaladores e
-desinstaladores antigos deixam cópias `settings.json.habblaud-backup-<data>` na pasta de cada conta (ex.:
-`~/.claude/`); apague-as se não precisar mais.
+Then just delete the project folder — run `mod:uninstall` **first**, or the accounts' Claude Code will start
+complaining about the missing marketplace. If you used the old way, also run `npm run usage:uninstall` (restores the
+original statusline) and `npm run hooks:uninstall` (removes the permission hook); without them, the accounts' statusline starts
+showing an error (and the hook, failing silently). `mod:install`, which removes the old tap and hook, and the old installers and
+uninstallers leave `settings.json.habblaud-backup-<data>` copies in each account's folder (e.g.
+`~/.claude/`); delete them if you no longer need them.
 
-## Como usar
+## How to use
 
-### O que cada personagem está fazendo
+### What each character is doing
 
-| Estado | O que você vê |
+| State | What you see |
 | --- | --- |
-| **Trabalhando** | Na mesa, digitando. O monitor e um balão mostram a atividade: 📖 lendo, ✏️ editando, 💻 terminal, 🧪 testes, 🌐 pesquisando… |
-| **Precisa de você** | Corre para a mesa e levanta a mão, com alerta piscando: está esperando uma permissão ou resposta no terminal. |
-| **Esperando o shell** | Terminou o turno mas deixou um comando rodando (testes, build, deploy…), então fica na mesa com uma ampulheta virando sobre a cabeça e o terminal em progresso: come pipoca assistindo, depois de 3 min cruza os braços e gira na cadeira, depois de 10 min junta teia de aranha e depois de 25 min cochila; quando o comando termina, levanta e comemora com confete (ou ganha uma nuvem de chuva, se falhou). Depois de 40 s, se houver colegas à toa, pode sair para uma roda — com a ampulheta na cabeça. |
-| **Ocioso** | Terminou o turno e passeia: café na copa, bebedouro, banheiro, sofá do lounge, celular no puff, espelho. Com colegas à toa, entra numa roda: TV, videogame, ping-pong, papo na copa, jokenpô (veja [Vida social](#vida-social)). Depois de 10 min parado, cochila — mas um colega pode acordá-lo para uma roda. |
-| **Subagente concluído** | Vai até o agente que o chamou, entrega o resultado e sai pelo elevador. |
-| **Sessão encerrada** | Vai embora; se era o último da sala, apaga a luz antes de sair. |
+| **Working** | At the desk, typing. The monitor and a bubble show the activity: 📖 reading, ✏️ editing, 💻 terminal, 🧪 tests, 🌐 searching… |
+| **Needs you** | Rushes to the desk and raises a hand, with a blinking alert: it's waiting for a permission or an answer in the terminal. |
+| **Waiting on shell** | Finished its turn but left a command running (tests, build, deploy…), so it stays at the desk with an hourglass flipping over its head and the terminal in progress: it eats popcorn while watching, after 3 min it crosses its arms and spins in its chair, after 10 min it gathers cobwebs and after 25 min it dozes off; when the command finishes, it stands up and celebrates with confetti (or gets a rain cloud, if it failed). After 40 s, if there are coworkers with nothing to do, it may head out to a hangout — with the hourglass over its head. |
+| **Idle** | Finished its turn and wanders around: coffee in the kitchen, the water cooler, the restroom, the lounge couch, the phone on the beanbag, the mirror. With idle coworkers around, it joins a hangout: TV, video games, ping-pong, a kitchen chat, rock-paper-scissors (see [Social life](#social-life)). After 10 min without moving, it dozes off — but a coworker may wake it up for a hangout. |
+| **Subagent done** | Walks over to the agent that called it, delivers the result and leaves by elevator. |
+| **Session ended** | Leaves; if it was the last one in the room, it turns off the lights on the way out. |
 
-Cada personagem tem um **nome brasileiro único** (Marina, Henrique, Luan…) que se mantém enquanto a sessão existir, e
-um **chip colorido com a letra da conta** (C, D…).
+Each character has a **unique Brazilian name** (Marina, Henrique, Luan…) that stays as long as the session exists, and
+a **colored chip with the account letter** (C, D…).
 
 ### Interface
 
-- **Topo:** contadores (salas, agentes, trabalhando, subagentes, shells rodando, precisam de você) e um cartão de
-  **uso por conta**. O de shells só aparece enquanto algum comando está rodando; clique nele para ir até quem espera.
-  Embaixo do logo ficam a conexão e a versão em uso, que vira o selo **Nova versão** quando sai uma versão nova (veja
-  [Atualizar](#atualizar)).
-- **Painel lateral:** busca, filtro por conta e a lista de salas com seus agentes e subagentes.
-- **Gaveta de detalhes:** clique num personagem (no prédio ou na lista) para ver atividade, tarefas, subagentes,
-  linha do tempo e estatísticas (ferramentas, tokens, custo, linhas alteradas, modelo, branch).
-- **Feed:** as últimas atividades de todo o escritório.
-- **Configurações (⚙):** nomes, balões, quanto os ociosos passeiam, ciclo dia/noite, sons, notificações do navegador,
-  modo demonstração e **Sobre** (versão em uso e versão nova). **Ajuda (?):** legenda completa e atalhos.
-- **Meu dia (📊):** para onde foi o tempo do dia (veja [Meu dia](#meu-dia)). **Timelapse** e **Histórico** (os relógios
-  da barra superior): veja [Timelapse do dia](#timelapse-do-dia) e [Terminal somente leitura](#terminal-somente-leitura).
+- **Top:** counters (rooms, agents, working, subagents, shells running, need you) and a **per-account usage**
+  card. The shells counter only shows up while some command is running; click it to go to whoever is waiting.
+  Below the logo are the connection and the version in use, which turns into the **New version** badge when a new version comes out (see
+  [Updating](#updating)).
+- **Side panel:** search, account filter and the list of rooms with their agents and subagents.
+- **Details drawer:** click a character (in the building or in the list) to see activity, tasks, subagents,
+  timeline and stats (tools, tokens, cost, lines changed, model, branch).
+- **Feed:** the latest activity across the whole office.
+- **Settings (⚙):** names, bubbles, how much idle agents wander around, day/night cycle, sounds, browser notifications,
+  demo mode and **About** (version in use and new version). **Help (?):** full legend and shortcuts.
+- **My day (📊):** where the day's time went (see [My day](#my-day)). **Timelapse** and **Session history** (the clocks
+  in the top bar): see [Day timelapse](#day-timelapse) and [Terminal](#terminal).
 
-**Câmera:** arraste para mover, role para dar zoom, clique duplo num personagem para segui-lo.
+**Camera:** drag to move, scroll to zoom, double-click a character to follow it.
 
-**Atalhos:** `/` busca · `F` seguir o selecionado · `T` terminal · `L` timelapse · `M` meu dia · `P` próximo pedido
-de permissão · `O` ou `0` visão geral · `Esc` limpar seleção · `[` painel lateral · `]` feed · setas/`WASD` mover ·
-`+` `-` zoom · `?` ajuda.
+**Shortcuts:** `/` search · `F` follow the selected one · `T` terminal · `L` timelapse · `M` my day · `P` next request
+(permission or question) · `O` or `0` overview · `Esc` clear selection · `[` side panel · `]` feed · arrows/`WASD` move ·
+`+` `-` zoom · `?` help.
 
-### Dia, noite e sons
+### Office themes
 
-O escritório acompanha a **hora local**: de madrugada e à noite o gramado e a rua ficam azulados e escuros, os postes,
-os abajures, as máquinas e os monitores ligados acendem halos de luz, as salas com gente ficam iluminadas (a luz que
-apaga quando a sala esvazia continua valendo), os carros passam de farol aceso e aparecem vaga-lumes no jardim. No
-amanhecer (~5–7 h) e no entardecer (~17–19 h) tudo ganha um tom quente, e durante o dia o sol entra pelas janelas e
-desenha faixas de luz no piso — curtas ao meio-dia, longas e alaranjadas no fim da tarde. Em **Configurações › Ciclo
-dia/noite** dá para escolher automático, sempre dia ou sempre noite; para testar um horário, use `?hora=21:30` na URL.
+In **Settings → Appearance → Office theme**, choose:
 
-Os **sons** vêm desligados. Ligados em **Configurações › Sons**, são sintetizados no próprio navegador (sem arquivos
-de áudio) e baixinhos: o teclado de quem trabalha nas salas à vista, o "ding" do elevador quando alguém chega ou vai
-embora, o sino quando alguém precisa de você, o estalo de tarefa concluída e o pingue-pongue e o fliperama das rodas.
-Há volume geral e cada categoria liga e desliga à parte. Com a aba oculta, só o sino toca.
+- **Automatic** (default): follows the calendar, in local time. Halloween from October 1 to 31, Christmas from
+  November 1 to December 26 and, the rest of the year, the original look.
+- **None**: always the original look.
+- **Christmas**: wreaths, warm lights, trees with presents, Christmas rugs, snow on the windows and Santa hats on the characters.
+- **Halloween**: pumpkins, decorative ghosts, cobwebs, bats, purple lights, themed rugs and costume accessories.
 
-### Terminal somente leitura
-
-Clique num agente e use **Abrir terminal** para ver a conversa da sessão como o Claude Code mostra: os prompts, as
-respostas, cada ferramenta chamada (com o comando ou o diff) e o resultado, atualizados ao vivo. É só para ler: não
-dá para digitar nem interferir no agente. Vale para agentes principais e subagentes; no modo demonstração, a conversa
-é fictícia.
-
-- **Busca:** com o terminal em foco, `Ctrl+F` (`⌘F` no Mac) ou a lupa do cabeçalho abre a busca na conversa, sem
-  diferenciar maiúsculas nem acentos. O contador mostra a posição ("3/17"); `Enter` e `Shift+Enter` vão para o próximo
-  e o anterior, abrindo os blocos recolhidos ("… +N linhas") onde o termo estiver. A busca continua valendo enquanto
-  chegam mensagens novas. `Esc` fecha a busca; o seguinte fecha o terminal.
-- **Filtro:** **Tudo**, **Só prompts** (os seus prompts e as respostas finais do agente, sem os passos intermediários)
-  ou **Sem ferramentas**.
-- **Copiar:** passe o mouse (ou o foco) sobre um prompt, uma resposta, um comando ou um resultado para copiá-lo.
-- **Histórico:** o relógio da barra superior lista as sessões dos últimos 7 dias de todas as contas (até 150), agrupadas
-  por dia, com busca por título, projeto ou conta. Uma sessão encerrada abre no terminal com projeto, título e data no
-  cabeçalho e "Sessão encerrada às …" no rodapé; uma sessão ainda aberta abre o terminal ao vivo do agente.
-
-Como o terminal (e o histórico) mostra a conversa inteira, ele só existe quando o Habblaud está acessível **apenas pelo
-próprio computador** (o padrão) e só abre por `http://localhost` ou `http://127.0.0.1`. Com a porta liberada para a rede
-(`HABBLAUD_BIND=0.0.0.0` ou `HABBLAUD_HOST=0.0.0.0`), ele fica desligado. Detalhes em
-[Privacidade e segurança](#privacidade-e-segurança).
-
-### Timelapse do dia
-
-O botão **Timelapse** (relógio com a seta de voltar, ou a tecla `L`) reproduz o dia em alta velocidade: salas
-acendendo e apagando, agentes chegando, trabalhando, esperando você, indo para as rodas, subagentes entrando e saindo.
-A barra de reprodução tem o dia, play/pausa, a velocidade (60×, 180× ou 600×: um dia de 10 h em 10, 3⅓ ou 1 min),
-a linha do tempo arrastável com o gráfico de quem estava presente e trabalhando, as marcas dos picos (clique para
-pular até lá) e **Voltar ao vivo**. Enquanto isso, o escritório fica levemente sépia, com o selo **REPLAY 14:32**, e o
-feed continua mostrando o que acontece agora.
-
-O servidor grava a linha do tempo **a partir do momento em que está ligado** (não dá para reconstruir o passado):
-resumos do que o escritório mostra, sem conversas, em `~/.habblaud/timeline/` (no Docker, no volume de dados), com
-limite de tamanho por dia e os últimos **7 dias** guardados. Para não gravar: `HABBLAUD_TIMELINE=0`. Detalhes em
-[`server/README.md`](server/README.md#linha-do-tempo-timelapse).
-
-Os personagens andam mais rápido no replay, mas nas velocidades altas quem fica pouco tempo no escritório quase não
-chega à mesa; pular para outro ponto mostra todos já no lugar.
-### Responder pelo escritório
-
-Com o plugin de permissões instalado (`npm run mod:install`, que o instala junto com o mod; no Claude Code anterior
-ao 2.1.287, `npm run hooks:install`), quando um agente pede permissão — rodar um comando, editar um arquivo, abrir
-uma página — o pedido aparece no escritório: o personagem levanta a mão, um aviso com **Responder**
-surge na tela e, nos detalhes do agente, o cartão **Pede permissão** mostra o comando (ou o diff da edição) com os
-botões:
-
-- **Aprovar** — e, quando o Claude Code sugere, **Aprovar e não perguntar de novo** (a mesma regra que o terminal
-  ofereceria, por exemplo `Bash(npm test:*)` neste projeto);
-- **Recusar** — com um motivo opcional, que vai para o agente, e a opção de interrompê-lo;
-- **Responder no terminal** — o Habblaud deixa o pedido de lado.
-
-O diálogo continua aparecendo no terminal ao mesmo tempo, e vale o que você responder primeiro: respondeu no
-terminal, o pedido some do escritório sozinho. O contador **precisam de você** (e a tecla `P`) leva até cada pedido.
-Perguntas do agente (`AskUserQuestion`) continuam só no terminal.
-
-- O pedido passa por um hook `PermissionRequest` do Claude Code (o do plugin, ou o do jeito antigo), que só o desvia
-  quando há **alguma página do Habblaud aberta** neste computador; com o Habblaud parado ou sem nenhuma página, ele
-  sai na hora e o terminal segue normal.
-- Sem resposta pelo escritório em 5 minutos, o pedido volta a valer só no terminal (as opções do plugin estão em
-  [`mod/README.md`](mod/README.md); no jeito antigo, `npm run hooks:install -- --timeout 120` muda o tempo e
-  `--port`, a porta). Em **subagentes em segundo plano** o Claude Code só mostra o diálogo no terminal depois que o
-  hook termina: responda pelo escritório ou use **Responder no terminal**.
-- Funciona com a mesma trava do terminal somente leitura: só com o Habblaud acessível apenas pelo próprio
-  computador e aberto por `http://localhost`. Confira com `npm run mod:status` (ou `npm run hooks:status`, no jeito
-  antigo).
-- No modo demonstração, os agentes fictícios também pedem permissão (de mentira), para experimentar.
-
-### GitHub no escritório
-
-O que os agentes fazem no GitHub anima a sala do projeto, sem token e sem acessar a internet: o Habblaud lê nos
-transcripts as chamadas (`gh pr create`, `gh pr merge`, `git push`, `gh run watch`, `gh pr checks`, `gh run view`,
-`gh release create` e as ferramentas do MCP do GitHub) e os resultados delas.
-
-| Evento | O que acontece |
-| --- | --- |
-| 🎉 **PR aberto ou mergeado, release publicada** | Confete cai na sala, todos comemoram com pulinhos e uma faixa diz o motivo ("PR #12 mergeado!") por ~12 s. |
-| 🚨 **CI vermelho** | Giroflex piscando nos cantos da sala, chão avermelhado e um balão "!" sobre quem viu a falha, até um CI verde na sala (que vira festa) ou por 10 min. |
-| 🚀 **Push** | Só o aviso e o feed. |
+The switch is immediate and the choice is saved in this browser. The themes keep the agents' paths,
+activities and animations. The day/night cycle is still a separate option.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/github-party.png" alt="Sala app-mobile em festa: confete caindo, a faixa dourada 'PR #12 mergeado!' e Jéssica de pé com os braços para cima e uma estrela sobre a cabeça" /></td>
-    <td width="50%"><img src="docs/screenshots/github-alarm.png" alt="Sala data-pipeline em alarme: chão avermelhado, faixa vermelha 'CI falhou (feat/checkout)', giroflex nos cantos de cima e um balão '!' vermelho ao lado de Ícaro" /></td>
+    <td width="50%"><img src="docs/screenshots/seasonal-christmas.png" alt="Office with the Christmas theme: trees with presents in the corners of the rooms, wreaths and lights on the walls, red rugs and characters in Santa hats" /></td>
+    <td width="50%"><img src="docs/screenshots/seasonal-halloween.png" alt="Office with the Halloween theme: pumpkins and ghosts in place of the plants, cobwebs and bats on the walls, purple rugs and characters in costume" /></td>
   </tr>
 </table>
 
-Cada evento também gera um aviso ("🎉 Danilo abriu o PR #12 em habblaud", "🚨 CI falhou em habblaud (feat/x)") e entra
-no feed. Só o que acontece ao vivo anima a sala: o que já estava nos transcripts quando o Habblaud abriu vai só para o
-histórico. Com "reduzir movimento" ligado no sistema, nada pisca nem gira. No modo demonstração, PRs, merges e CIs
-fictícios aparecem de tempos em tempos.
-### Meu dia
+### Languages
 
-O botão **Meu dia** (ou a tecla `M`) mostra para onde foi o dia: quanto tempo os agentes passaram trabalhando e,
-em destaque, quanto tempo ficaram **esperando você** (permissão, pergunta ou escolha) — com a maior espera, quem
-esperou, onde e quando. Ao lado, sessões, subagentes, pedidos, tokens e custo (quando o Claude Code grava o custo no
-transcript), e gráficos por hora, por projeto (do que mais esperou você para o que menos esperou) e por conta, além
-do ranking das maiores esperas. Escolha o dia no seletor (o Habblaud guarda os últimos 30); aberto no dia de hoje,
-o painel se atualiza a cada 30 s. Cada gráfico tem uma versão em tabela, e a legenda liga e desliga cada status.
+The interface is in **Portuguese, English, Spanish and French**. It follows the browser's language; in
+**Settings › Language** you can pin one (the choice is saved in this browser). The texts the server builds
+(activities, notices, terminal, logs and the install scripts) follow `HABBLAUD_LANG` and, without it, the
+system language, except English: many machines and every container come in English by default, even for people who use another language.
+For the server in English, set `HABBLAUD_LANG=en` (in Docker, in `.env`). Any text without a translation shows up in
+Portuguese.
 
-O tempo é **tempo de agente**: dois agentes trabalhando por uma hora contam duas horas. O Habblaud só conta o que
-acontece enquanto ele está rodando, e o dia segue o fuso do seu navegador. Com o modo demonstração ligado, o painel
-mostra números fictícios (com o selo "demonstração") e deixa alternar para os dados reais; os agentes do demo nunca
-entram nas estatísticas de verdade.
+### Day, night and sounds
 
-### Modo demonstração
+The office follows **local time**: late at night and in the evening the lawn and the street turn bluish and dark, the streetlights,
+the lamps, the machines and the monitors that are on cast halos of light, the rooms with people in them are lit (the lights that
+go out when a room empties still apply), the cars drive by with their headlights on and fireflies show up in the garden. At
+dawn (~5–7 a.m.) and at dusk (~5–7 p.m.) everything takes on a warm tone, and during the day the sun comes in through the windows and
+draws strips of light on the floor — short at noon, long and orange in the late afternoon. In **Settings › Day/night
+cycle** you can choose automatic, always day or always night; to test a time, use `?hora=21:30` in the URL.
 
-Quer ver o escritório cheio sem ter sessões abertas?
+**Sounds** come turned off. Turned on in **Settings › Sounds**, they're synthesized in the browser itself (no audio
+files) and quiet: the typing of whoever is working in the rooms in view, the elevator "ding" when someone arrives or
+leaves, the bell when someone needs you, the click of a finished task and the ping-pong and arcade sounds of the hangouts.
+There's a master volume and each category can be turned on and off separately. With the tab hidden, only the bell rings.
 
-- Acrescente **`?mock=1`** à URL (ex.: http://localhost:4747/?mock=1) para simular tudo no navegador, sem as suas
-  sessões reais. Parâmetros: `&speed=3` acelera o tempo e `&sessions=6` muda o número de sessões simuladas.
-- Ou ligue pela interface — **Ver demonstração** (quando o escritório está vazio) ou **Configurações › Modo
-  demonstração** —, que coloca agentes fictícios junto com os reais. Com `npm run demo` (ou `HABBLAUD_DEMO=1` no
-  `.env` do Docker), esse modo já começa ligado.
+### Terminal
 
-## Contas e uso (5 horas e semanal)
+Click an agent and use **Open terminal** to see the session's conversation the way Claude Code shows it: the prompts, the
+replies, each tool call (with the command or the diff) and the result, updated live. It works for main
+agents and subagents; in demo mode, the conversation is made up.
 
-Se você usa mais de uma conta do Claude Code (por exemplo, um atalho `c` com `~/.claude` e um `d` com
-`CLAUDE_CONFIG_DIR=~/.claude-conta2`), o Habblaud mostra todas juntas: cada agente leva o chip da sua conta e o topo
-mostra, para cada conta, o **percentual usado** da sessão de 5 horas e da semana e **quando cada limite reinicia**.
+At the bottom, for main agents, you can **type**: `Enter` sends and `Shift+Enter` adds a new line. The text goes
+into the session as if you had typed it in its terminal (see [Sending messages](#sending-messages)); if the agent
+is busy, it goes in when the agent finishes what it's doing. Subagents and sessions from the history stay read-only.
 
-**Como as contas são reconhecidas.** Cada pasta de configuração do Claude Code é uma conta: `~/.claude` e qualquer
-`~/.claude*` com `projects/` ou `sessions/` (além de `CLAUDE_CONFIG_DIR`). Para dar a letra de cada uma, o Habblaud
-lê nos arquivos do shell (`~/.zshrc`, `~/.bashrc`…) **somente** as linhas `alias x='... claude ...'`:
+- **Search:** with the terminal focused, `Ctrl+F` (`⌘F` on Mac) or the magnifier in the header opens search in the conversation,
+  ignoring case and accents. The counter shows the position ("3/17"); `Enter` and `Shift+Enter` go to the next
+  and the previous one, expanding the collapsed blocks ("… +N lines") where the term is. Search keeps working while
+  new messages arrive. `Esc` closes the search; the next one closes the terminal.
+- **Filter:** **All**, **Prompts only** (your prompts and the agent's final replies, without the intermediate steps)
+  or **No tools**.
+- **Copy:** hover over (or focus) a prompt, a reply, a command or a result to copy it.
+- **Session history:** the clock in the top bar lists the sessions from the last 7 days across all accounts (up to 150), grouped
+  by day, with search by title, project or account. An ended session opens in the terminal with the project, title and date in the
+  header and "Session ended at …" at the bottom; a session that's still open opens the agent's live terminal.
+
+Since the terminal (and the history) shows the whole conversation, it only exists when Habblaud is reachable **only from the
+computer it runs on** (the default), and it only opens through `http://localhost` or `http://127.0.0.1`. With the port open to the network
+(`HABBLAUD_BIND=0.0.0.0` or `HABBLAUD_HOST=0.0.0.0`), it stays off. Details in
+[Privacy and security](#privacy-and-security).
+
+### Interactive terminal (take over, new session and end)
+
+With `HABBLAUD_PTY=1` and running with `npm start` (outside Docker), each main agent's terminal window is
+interactive: the drawer's **Open terminal** button, the shortcut next to each agent in the side list or the `T` key
+open the same window, with tabs for the other agents in the same project.
+
+- Session opened here: it's the real Claude Code (type, answer; Esc interrupts the agent, as in the terminal).
+- Session opened in another terminal: **Take over here** (at the top of the window) ends the session there and continues the **same
+  conversation** here (`claude --resume <sessão>`, in the same folder and account). The character keeps its name. On Windows, the
+  terminal the session came from goes back to normal (Habblaud turns off the mouse/keyboard modes that Claude turned on).
+- **End** closes the session, whether it's here or in another terminal (the conversation is saved).
+- **New session** (in the room's drawer) opens a new Claude Code in the project folder.
+
+Taking over and ending ask for a second click; closing the window doesn't end the session. The window (and the agent's
+drawer) can be dragged by its bar and resized from the corner; double-clicking the bar puts it back in place.
+**It comes turned off:** turn it on with `HABBLAUD_PTY=1` (first read the warning in [Privacy and security](#privacy-and-security)).
+It uses `node-pty`, `@xterm/headless` (optional dependencies) and the `claude` on your PATH (`HABBLAUD_CLAUDE_BIN` for
+another one); it only accepts requests from the computer it runs on. On startup, Habblaud opens a test terminal: if `node-pty` or
+`claude` don't work, the feature stays off and the log says why. **Restarting Habblaud ends the sessions
+it opened.**
+The live terminal is still available in the session history, for subagents and when the interactive one is off.
+
+### Day timelapse
+
+The **Timelapse** button (a clock with a back arrow, or the `L` key) replays the day at high speed: rooms
+lighting up and going dark, agents arriving, working, waiting on you, heading to the hangouts, subagents coming and going.
+The playback bar has the day, play/pause, the speed (60×, 180× or 600×: a 10-hour day in 10, 3⅓ or 1 min),
+the draggable timeline with the chart of who was present and working, the peak markers (click to
+jump there) and **Back to live**. Meanwhile, the office takes on a light sepia tone, with the **REPLAY 14:32** badge, and the
+feed keeps showing what's happening now.
+
+The server records the timeline **from the moment it's turned on** (the past can't be rebuilt):
+summaries of what the office shows, without conversations, in `~/.habblaud/timeline/` (in Docker, in the data volume), with
+a size limit per day and the last **7 days** kept. To not record: `HABBLAUD_TIMELINE=0`. Details in
+[`server/README.md`](server/README.md#linha-do-tempo-timelapse).
+
+The characters walk faster in the replay, but at high speeds anyone who stays only briefly in the office barely
+reaches their desk; jumping to another point shows everyone already in place.
+### Answering from the office
+
+With the permissions plugin installed (`npm run mod:install`, which installs it along with the mod; on Claude Code older
+than 2.1.287, `npm run hooks:install`), when an agent asks for permission — to run a command, edit a file, open
+a page — the request shows up in the office: the character raises a hand, a notice with **Reply**
+pops up on screen and, in the agent's details, the **Asks for permission** card shows the command (or the edit's diff) with the
+buttons:
+
+- **Approve** — and, when Claude Code suggests it, **Approve and don't ask again** (the same rule the terminal
+  would offer, for example `Bash(npm test:*)` in this project);
+- **Deny** — with an optional reason, which goes to the agent, and the option to interrupt it;
+- **Answer in terminal** — Habblaud sets the request aside.
+
+The dialog keeps showing in the terminal at the same time, and whichever answer comes first wins: if you answered in the
+terminal, the request disappears from the office on its own. The **need you** counter (and the `P` key) takes you to each request.
+
+**The agent's questions** (`AskUserQuestion`) work too: the questions card shows each question with its
+options and descriptions, as the terminal would. Pick an option (or several, when the question allows it) or write
+your own in **Other**, and use **Reply**; **Deny…** tells the agent you don't want to answer, and **Answer in
+terminal** leaves the question there. The answer reaches the agent as if you had chosen it in the terminal.
+
+- The request goes through a Claude Code `PermissionRequest` hook (the plugin's, or the old way's), which only diverts it
+  when there's **some Habblaud page open** on this computer; with Habblaud stopped or no page open, it
+  exits right away and the terminal carries on as usual.
+- With no answer from the office within 5 minutes (up to 24 h with `HABBLAUD_PERMISSION_TIMEOUT=86400` in the `env`
+  of `settings.json`), the request goes back to being answerable only in the terminal (the plugin's options are in
+  [`mod/README.md`](mod/README.md); in the old way, `npm run hooks:install -- --timeout 120` changes the time and
+  `--port`, the port). For **background subagents**, Claude Code only shows the dialog in the terminal after the
+  hook finishes: answer from the office or use **Answer in terminal**. With a wait longer than 5 minutes, if no
+  page that can answer stays open for 5 minutes (and no [phone with login](#phone-with-login-and-https-approving-requests)
+  is set up to answer), the request goes back to the terminal.
+- It works under the same safeguard as the terminal: only with Habblaud reachable only from the computer it runs on
+  and opened through `http://localhost`. Check with `npm run mod:status` (or `npm run hooks:status`, in the old
+  way). It also works from the [phone with login](#phone-with-login-and-https-approving-requests) (its default).
+- In demo mode, the made-up agents also ask for permission and ask questions (pretend ones), so you can
+  try it out.
+
+### Sending messages
+
+With the messages plugin installed (`npm run mod:install`, which installs it along with the mod; it requires Claude Code
+2.1.287 or newer), each main agent's details get the **Send message** section, and the bottom of the
+[terminal](#terminal) becomes a text box. Write and press `Enter` (`Shift+Enter` adds a new line): the text
+goes into the session **as if you had typed it in its terminal**. You can reply when the agent finishes its turn
+and waits for the next request, give a new instruction or correct its course, without hunting for the right window.
+
+- The box shows the status: **queued** (the session fetches messages every 2 seconds), **delivered** or **not
+  delivered**, with the reason. With the agent busy, the message waits and goes in when it finishes its turn, like a
+  prompt typed while the agent is working.
+- The plugin runs inside each session and only talks to Habblaud at `127.0.0.1`. Without it (or in a session opened before
+  the install: use `/reload-plugins`), an install hint shows up in place of the box. Subagents don't receive
+  messages.
+- It works under the same safeguard as the terminal (local access only) and can be turned off with `HABBLAUD_MENSAGENS=0`.
+  Read the warning in [Privacy and security](#privacy-and-security).
+  From the [phone with login](#phone-with-login-and-https-approving-requests), only with `messages` in `HABBLAUD_REMOTE_ALLOW`.
+- In demo mode, the made-up agents also receive messages (pretend ones).
+
+### Editing the character
+
+Each session arrives with a random name and look. To pin a project's character, open the main
+agent's details and click the pencil next to the name (**Edit character**). In the editor:
+
+- **Name:** up to 24 characters. It can't repeat the name of someone who's in the office or the one chosen for another
+  project.
+- **Randomize:** brings up another look.
+- **Pieces:** skin, hair, beard, eyes, top, bottom, shoes and accessory, with a preview next to them.
+- **Save:** applies to the project (the room). The next session opened in it arrives as this character. With two sessions
+  at the same time in the same room, the second one gets a random character.
+- **Back to random:** undoes the choice.
+
+The choice is stored in `~/.habblaud/names.json` and goes away after 60 days without the project being used. The editor has the same safeguard as the
+terminal: the pencil only shows up with the terminal on (without `HABBLAUD_TERMINAL=0`) and local access, that
+is, with Habblaud reachable only from the computer it runs on and opened through `http://localhost`.
+
+### Codex
+
+Codex sessions (CLI or app) show up like Claude Code's: character, project room, activity, tasks,
+subagents, terminal and history, 5-hour and weekly usage and **My day** (tokens only: Codex doesn't report cost). The
+Codex account chip is hollow and carries the **CODEX** tag.
+
+- **Without installing anything**, Habblaud reads the files Codex itself writes (the conversations in `~/.codex/sessions` and the
+  locks of the open sessions in `~/.codex/thread-writer-locks`). The catch is that Codex writes each step **after** it
+  finishes and never writes "waiting on you": without the hooks, the office shows Codex with a delay and doesn't tell you when it
+  needs you.
+- **With the hooks** (`npm run codex:install` and approving them in `/hooks`), Codex notifies Habblaud at every step: the session
+  shows up right away, the activity is the current one and an approval request makes the character raise a hand.
+- **Approving from the office:** with some Habblaud page open, Codex's approval request waits for your
+  answer in the **Asks for permission** card for up to **25 seconds** (`npm run codex:install -- --espera <s>`, from 5 to 120):
+  **Approve** or **Deny** (with the reason). Unlike Claude Code, Codex only shows the approval in the terminal
+  **after** the office answers or the time runs out — in the meantime the terminal shows "Waiting for an answer in
+  Habblaud…". There's no "always allow" or "interrupt", and Codex doesn't let you answer its questions from outside.
+- **Sending messages:** the **Send message** box works for Codex too, through `codex queue`: the message joins
+  the session's queue and Codex picks it up when it finishes what it's doing (up to about 10 seconds later). In Node mode
+  Habblaud runs the command itself; **in Docker**, keep `npm run codex:bridge` running on the Mac (the container can't
+  see your Codex).
+- **5-hour and weekly usage:** comes from Codex's own files and only refreshes while some session is running; the card
+  shows how old the numbers are and "no quota" when the workspace has run out of credits.
+- **When the session comes in:** with the first message (that's when Codex records the project folder); a CLI that's open
+  and still has no conversation doesn't show up.
+- **When the session leaves the office:** the Codex CLI runs sessions on a background server, which keeps them
+  loaded for up to a minute after they go idle with no one watching; that's why the character may take a
+  little while to leave after you close the terminal.
+- ChatGPT cloud conversations (with no file on the computer) don't show up. `HABBLAUD_CODEX=0` turns Codex off.
+
+### OpenCode
+
+OpenCode sessions show up like Claude Code's and Codex's: character, project room (the session's folder), activity,
+tasks and subagents. The account chip is fixed and is called "OpenCode". This part is implemented
+and covered by automated tests, and was checked on OpenCode 1.18.35, on Linux, with a temporary, isolated home folder.
+
+- Habblaud reads OpenCode's database every second, read-only, without installing anything. A session shows up while
+  it was touched in the last 30 minutes and isn't archived; a child session (`parent_id`) becomes a subagent of the
+  main one. Working or idle comes from the assistant's last reply, and the activity comes from the last tool used
+  (bash, read, edit, write, grep, glob, webfetch, task). It needs Node 22.13 or newer; without the database, or on
+  Node 22.12, the reading simply doesn't turn on. The database isn't mounted in Docker (`docker:up` mounts no SQLite
+  file), so this reading only works with Habblaud in Node mode.
+- `HABBLAUD_OPENCODE=0` turns OpenCode off in the office; `HABBLAUD_OPENCODE_DIR` points to OpenCode's data folder.
+- OpenCode has no usage (quota), and the terminal and the session history don't cover OpenCode yet.
+
+### GitHub in the office
+
+What the agents do on GitHub livens up the project's room, with no token and no internet access: Habblaud reads the
+calls in the transcripts (`gh pr create`, `gh pr merge`, `git push`, `gh run watch`, `gh pr checks`, `gh run view`,
+`gh release create` and the GitHub MCP tools) and their results.
+
+| Event | What happens |
+| --- | --- |
+| 🎉 **PR opened or merged, release published** | Confetti falls in the room, everyone celebrates by hopping and a banner says why ("PR #12 merged!") for ~12 s. |
+| 🚨 **Red CI** | A rotating beacon flashing in the corners of the room, a reddish floor and a "!" bubble over whoever saw the failure, until a green CI in the room (which turns into a party) or for 10 min. |
+| 🚀 **Push** | Just the notice and the feed. |
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/github-party.png" alt="The app-mobile room partying: confetti falling, the golden banner 'PR #12 merged!' and Jéssica standing with her arms up and a star over her head" /></td>
+    <td width="50%"><img src="docs/screenshots/github-alarm.png" alt="The data-pipeline room on alert: reddish floor, red banner 'CI failed (feat/checkout)', rotating beacons in the top corners and a red '!' bubble next to Ícaro" /></td>
+  </tr>
+</table>
+
+Each event also creates a notice ("🎉 Danilo opened PR #12 in habblaud", "🚨 CI failed in habblaud (feat/x)") and goes
+into the feed. Only what happens live livens up the room: whatever was already in the transcripts when Habblaud opened only goes to the
+history. With "reduce motion" turned on in the system, nothing flashes or spins. In demo mode, made-up PRs, merges and CI runs
+show up from time to time.
+### My day
+
+The **My day** button (or the `M` key) shows where the day went: how much time the agents spent working and,
+highlighted, how much time they spent **waiting on you** (permission, question or choice) — with the longest wait, who
+waited, where and when. Next to it, sessions, subagents, requests, tokens and cost (when Claude Code records the cost in the
+transcript), and charts by hour, by project (from the one that waited on you the most to the one that waited the least) and by account, plus
+the ranking of the longest waits. Pick the day in the selector (Habblaud keeps the last 30); when it's showing today,
+the panel refreshes every 30 s. Each chart has a table version, and the legend turns each status on and off.
+
+The time is **agent time**: two agents working for an hour count as two hours. Habblaud only counts what
+happens while it's running, and the day follows your browser's time zone. With demo mode on, the panel
+shows made-up numbers (with the "demo" badge) and lets you switch to the real data; the demo agents never
+go into the real stats.
+
+### Demo mode
+
+Want to see the office full without having any sessions open?
+
+- Add **`?mock=1`** to the URL (e.g. http://localhost:4747/?mock=1) to simulate everything in the browser, without your
+  real sessions. Parameters: `&speed=3` speeds up time and `&sessions=6` changes the number of simulated sessions.
+- Or turn it on from the interface — **View demo** (when the office is empty) or **Settings › Demo
+  mode** — which puts made-up agents alongside the real ones. With `npm run demo` (or `HABBLAUD_DEMO=1` in the
+  Docker `.env`), this mode starts already on.
+
+## Accounts and usage (5-hour and weekly)
+
+> **Codex** accounts come in on their own (each `~/.codex*` folder or `CODEX_HOME` is an account; the letter comes from an
+> `alias x='CODEX_HOME=… codex'`, if there is one) and their usage comes from Codex's files; see [Codex](#codex). The rest
+> of this section is about Claude Code.
+
+If you use more than one Claude Code account (for example, a `c` shortcut with `~/.claude` and a `d` with
+`CLAUDE_CONFIG_DIR=~/.claude-conta2`), Habblaud shows them all together: each agent carries its account's chip and the top bar
+shows, for each account, the **percentage used** of the 5-hour session and of the week and **when each limit resets**.
+
+**How accounts are recognized.** Each Claude Code config folder is an account: `~/.claude` and any
+`~/.claude*` with `projects/` or `sessions/` (plus `CLAUDE_CONFIG_DIR`). To give each one its letter, Habblaud
+reads, in your shell files (`~/.zshrc`, `~/.bashrc`…), **only** the `alias x='... claude ...'` lines:
 
 ```bash
 alias c='claude'
 alias d='CLAUDE_CONFIG_DIR=~/.claude-conta2 claude'
 ```
 
-vira **Conta C** e **Conta D**. Só valem atalhos de até 3 letras; contas sem atalho recebem A, B…
+becomes **Account C** and **Account D**. Only shortcuts of up to 3 letters count; accounts without a shortcut get A, B…
 
-**De onde vêm os números.** O jeito recomendado é o mod do Habblaud (`npm run mod:install`, Claude Code 2.1.287+):
-dentro de cada sessão, ele recebe do próprio Claude Code os limites do plano e guarda só os percentuais de 5 horas e
-da semana (e quando reiniciam) em `~/.habblaud/usage/<conta>.json`. Os números chegam depois da próxima resposta de
-cada conta. Confira com `npm run mod:status`. Em versões anteriores do Claude Code, o tap de statusline
-(`npm run usage:install`) faz o mesmo pelo comando de statusline, no mesmo arquivo.
+**Where the numbers come from.** The recommended way is the Habblaud mod (`npm run mod:install`, Claude Code 2.1.287+):
+inside each session, it receives the plan limits from Claude Code itself and stores only the 5-hour and weekly
+percentages (and when they reset) in `~/.habblaud/usage/<conta>.json`. The numbers arrive after each account's next
+reply. Check with `npm run mod:status`. On earlier versions of Claude Code, the statusline tap
+(`npm run usage:install`) does the same through the statusline command, in the same file.
 
 <details>
-<summary><b>Detalhes do tap e do cache do /usage</b></summary>
+<summary><b>Details of the tap and the /usage cache</b></summary>
 
-- O `usage:install` (jeito antigo) altera, em `<conta>/settings.json`, **só** o campo `statusLine.command`: o comando
-  original (ex.: `npx -y ccstatusline`) passa a rodar através de `node "<pasta do Habblaud>/scripts/statusline-tap.mjs" --
-  <comando original>`. Uma cópia do arquivo vai antes para `settings.json.habblaud-backup-<data>`. Se a conta não tinha
-  statusline, é criado um que só captura o uso. `npm run usage:install -- --dry-run` mostra o que mudaria sem gravar.
-- O tap repassa o mesmo JSON ao seu statusline (saída e código de saída continuam os dele) e grava **somente**
-  `{accountId, configDir, fetchedAt, five_hour, seven_day}` — nada de prompts, custos ou caminhos de projeto. Qualquer
-  falha na captura é ignorada: o statusline nunca quebra por causa do Habblaud.
+- `usage:install` (the old way) changes, in `<conta>/settings.json`, **only** the `statusLine.command` field: the
+  original command (e.g. `npx -y ccstatusline`) now runs through `node "<pasta do Habblaud>/scripts/statusline-tap.mjs" --
+  <comando original>` (on Windows, the original command runs in Git Bash, as Claude Code would run it). A copy of the
+  file first goes to `settings.json.habblaud-backup-<data>`. If the account had no statusline, one is created that only
+  captures usage. `npm run usage:install -- --dry-run` shows what would change without writing anything.
+- The tap passes the same JSON on to your statusline (output and exit code are still its own) and writes **only**
+  `{accountId, configDir, fetchedAt, five_hour, seven_day}` — no prompts, costs or project paths. Any
+  failure while capturing is ignored: the statusline never breaks because of Habblaud.
 
-| Fonte | Como funciona |
+| Source | How it works |
 | --- | --- |
-| **Mod do Habblaud** (recomendado) | Ao vivo, como descrito acima. Substitui o tap: o `mod:install` tira o tap da conta. |
-| Tap de statusline (Claude Code anterior ao 2.1.287) | Ao vivo, pelo comando de statusline, no mesmo arquivo. |
-| Cache do `/usage` (sempre ligado) | O Claude Code grava o último resultado do comando `/usage`. No modo Node, o Habblaud relê a cada 60 s; no Docker, vale o valor lido no último `npm run docker:up`. Só muda quando alguém roda `/usage`. |
+| **Habblaud mod** (recommended) | Live, as described above. Replaces the tap: `mod:install` removes the tap from the account. |
+| Statusline tap (Claude Code older than 2.1.287) | Live, through the statusline command, in the same file. |
+| `/usage` cache (always on) | Claude Code saves the last result of the `/usage` command. In Node mode, Habblaud rereads it every 60 s; in Docker, the value read at the last `npm run docker:up` applies. It only changes when someone runs `/usage`. |
 
-As fontes são arquivos locais: nenhuma lê senhas ou tokens, nem faz chamadas de rede. Vale sempre a fonte com os
-números mais recentes. Números com mais de 30 minutos aparecem como **desatualizados**; uma janela que já reiniciou
-desde a coleta aparece como **—** até chegarem números novos.
+The sources are local files: none of them reads passwords or tokens, or makes network calls. The source with the
+most recent numbers always wins. Numbers older than 30 minutes show up as **outdated**; a window that has already reset
+since the numbers were collected shows up as **—** until new numbers arrive.
 
 </details>
 
-## Configuração
+## Configuration
 
-Tudo funciona sem configurar nada. Se precisar ajustar, use variáveis de ambiente:
+Everything works without configuring anything. If you need to adjust something, use environment variables:
 
-| Variável | Padrão | Para quê |
+| Variable | Default | What for |
 | --- | --- | --- |
-| `HABBLAUD_PORT` | `4747` | Porta HTTP (no Docker, a porta publicada no host). |
-| `HABBLAUD_HOST` | `127.0.0.1` | Interface do servidor no modo Node. Fora de `127.0.0.1`/`localhost`, o terminal somente leitura fica desligado. |
-| `HABBLAUD_BIND` | `127.0.0.1` | Só Docker (no `.env`): onde a porta é publicada. `0.0.0.0` libera a rede local (e desliga o terminal somente leitura). |
-| `HABBLAUD_CLAUDE_DIRS` | detecção automática | Pastas das contas, separadas por vírgula (ex.: `/caminho/conta1,/caminho/conta2`). |
-| `HABBLAUD_DATA_DIR` | `~/.habblaud` | Onde o Habblaud guarda os próprios dados (nomes dos personagens, linha do tempo do timelapse e estatísticas do Meu dia). |
-| `HABBLAUD_TIMELINE` | ligado | `0` desliga a gravação da linha do tempo (os dias já gravados continuam no timelapse). No Docker fica sempre ligado. |
-| `HABBLAUD_USAGE_DIR` | `~/.habblaud/usage` | Onde o mod (ou o tap de statusline) grava o uso. |
-| `HABBLAUD_DEMO` | desligado | `1` liga o modo demonstração ao iniciar. |
-| `HABBLAUD_ALLOWED_HOSTS` | — | Nomes extras aceitos no endereço (ex.: `meu-mac.local`), além de `localhost` e IPs. |
-| `HABBLAUD_TERMINAL` | ligado (só com acesso local) | `0` desliga o terminal somente leitura. Com a porta exposta ele já fica desligado, sem opção de ligar. |
-| `HABBLAUD_UPDATE_CHECK` | ligado | `0` desliga a verificação de versão nova (uma consulta às releases do repositório no GitHub a cada 6 h). |
-| `HABBLAUD_ACCOUNTS` | — | JSON para personalizar nome, letra ou cor, casado pelo nome da pasta da conta. Ex.: `[{"id":".claude-conta2","name":"Trabalho","short":"T","color":"#5cc97b"}]`. |
+| `HABBLAUD_PORT` | `4747` | HTTP port (in Docker, the port published on the host). |
+| `HABBLAUD_HOST` | `127.0.0.1` | Server interface in Node mode. Anything other than `127.0.0.1`/`localhost` turns off the terminal (and answering and sending messages from the office). |
+| `HABBLAUD_BIND` | `127.0.0.1` | Docker only (in `.env`): where the port is published. `0.0.0.0` opens it to the local network (and turns off the terminal and anything that acts on the sessions). |
+| `HABBLAUD_CLAUDE_DIRS` | automatic detection | Account folders, comma-separated (e.g. `/caminho/conta1,/caminho/conta2`). |
+| `HABBLAUD_DATA_DIR` | `~/.habblaud` | Where Habblaud keeps its own data (character and room names, the timelapse timeline and the My day stats). |
+| `HABBLAUD_TIMELINE` | on | `0` turns off timeline recording (the days already recorded stay in the timelapse). In Docker it's always on. |
+| `HABBLAUD_USAGE_DIR` | `~/.habblaud/usage` | Where the mod (or the statusline tap) writes usage. |
+| `HABBLAUD_DEMO` | off | `1` turns on demo mode at startup. |
+| `HABBLAUD_ALLOWED_HOSTS` | — | Extra names accepted in the address (e.g. `meu-mac.local`), besides `localhost` and IPs. |
+| `HABBLAUD_TERMINAL` | on (local access only) | `0` turns off the terminal, answering and sending messages from the office, and the character editor. With the port exposed they're already off, with no way to turn them on. |
+| `HABBLAUD_PTY` | off | `1` turns on the interactive terminal (open, take over and end Claude Code sessions from the office; local access only and outside Docker) and **New agent** (also in Docker, through `npm run codex:bridge`). Read the warning in [Privacy and security](#privacy-and-security). |
+| `HABBLAUD_CLAUDE_BIN` | `claude` from PATH | The Claude Code executable that the interactive terminal and New agent run. |
+| `HABBLAUD_REMOTE_ALLOW` | `permissions` | What the [phone with login](#phone-with-login-and-https-approving-requests) can do: `permissions`, `messages`, `terminal`, `spawn` (comma-separated) or `none`. The other `HABBLAUD_REMOTE_*` are written by `npm run remote:setup`. |
+| `HABBLAUD_MENSAGENS` | on (with the terminal) | `0` turns off only messages from the office (the box in the terminal and in the agent's details). |
+| `HABBLAUD_CODEX` | on | `0` turns off Codex in the office. |
+| `HABBLAUD_CODEX_DIRS` | automatic detection | Codex folders, comma-separated (instead of `~/.codex*` and `CODEX_HOME`). |
+| `HABBLAUD_CODEX_BIN` | `codex` from PATH (on Windows, `codex.exe`) | The Codex binary that delivers the messages (`codex queue`), in Node mode or in `npm run codex:bridge`. |
+| `HABBLAUD_OPENCODE` | on | `0` turns OpenCode off in the office (the database reading). |
+| `HABBLAUD_OPENCODE_DIR` | `$XDG_DATA_HOME/opencode` or `~/.local/share/opencode` | OpenCode's data folder (where `opencode.db` lives). |
+| `HABBLAUD_UPDATE_CHECK` | on | `0` turns off the new-version check (a request to the repository's releases on GitHub every 6 h). |
+| `HABBLAUD_LANG` | system language (except English), otherwise `pt-BR` | Language of the texts the server builds (activities, notices, logs): `pt-BR`, `en`, `es` or `fr`. The interface follows the browser or the choice in Settings › Language. See [Languages](#languages). |
+| `HABBLAUD_ACCOUNTS` | — | JSON to customize name, letter or color, matched by the account folder name. E.g. `[{"id":".claude-conta2","name":"Trabalho","short":"T","color":"#5cc97b"}]`. |
 
-**No Docker**, valem `HABBLAUD_PORT`, `HABBLAUD_BIND`, `HABBLAUD_ALLOWED_HOSTS`, `HABBLAUD_DEMO`, `HABBLAUD_TERMINAL` e
-`HABBLAUD_UPDATE_CHECK` (no `.env` ou no ambiente) e `HABBLAUD_CLAUDE_DIRS`, `HABBLAUD_USAGE_DIR` e `HABBLAUD_ACCOUNTS` (lidas pelo `docker:up`
-no host); as demais ficam fixas dentro do container. Opções: `npm run docker:up -- --no-build` (sobe sem reconstruir),
-`npm run docker:down` (para) e `npm run docker:logs` (acompanha os logs).
+**In Docker**, `HABBLAUD_PORT`, `HABBLAUD_BIND`, `HABBLAUD_ALLOWED_HOSTS`, `HABBLAUD_DEMO`, `HABBLAUD_TERMINAL`,
+`HABBLAUD_MENSAGENS`, `HABBLAUD_CODEX`, `HABBLAUD_UPDATE_CHECK`, `HABBLAUD_LANG`, `HABBLAUD_PTY` and the
+`HABBLAUD_REMOTE_*` apply (in `.env` or in the environment), as do `HABBLAUD_CLAUDE_DIRS`, `HABBLAUD_CODEX_DIRS`, `HABBLAUD_USAGE_DIR` and
+`HABBLAUD_ACCOUNTS` (read by `docker:up` on the host); the rest are fixed inside the container. Options: `npm run docker:up -- --no-build` (starts without rebuilding),
+`npm run docker:down` (stops) and `npm run docker:logs` (follows the logs).
 
-## Como funciona
+## How it works
 
 ```
  ~/.claude*/sessions/<pid>.json ─────────────────┐
@@ -520,151 +773,205 @@ no host); as demais ficam fixas dentro do container. Opções: `npm run docker:u
  .../<sessão>/subagents/**/agent-*.jsonl ────────┘    (polling de 1 s)                                 (canvas + interface)
 ```
 
-- **Quem está no escritório:** enquanto uma sessão está aberta, o Claude Code mantém `sessions/<pid>.json` com o
-  projeto e o status (ocupado, ocioso, esperando você ou esperando um shell em segundo plano). É isso que decide
-  quem aparece e o que cada um faz.
-- **Shells rodando:** nos transcripts, cada `Bash` em segundo plano (ou comando longo em primeiro plano) vira um
-  "shell" com rótulo e cronômetro, até chegar a notificação de que terminou, falhou ou foi interrompido.
-- **Vida social:** as rodas, as personalidades e as moedinhas são simulação do navegador (`client/src/world/social/`),
-  sem nenhum efeito nos agentes de verdade. A personalidade sai da semente de cada agente (é a mesma em qualquer
-  navegador); as carteiras ficam no `localStorage` do navegador.
-- **O que cada um está fazendo:** o servidor acompanha o fim dos transcripts (`.jsonl`) das sessões abertas e traduz
-  cada chamada de ferramenta numa atividade em português, com ícone. Dali também saem tarefas, título, modelo e
-  estatísticas.
-- **Subagentes:** os transcripts em `<sessão>/subagents/` (inclusive os de workflows) viram personagens ligados ao
-  agente que os chamou.
-- **GitHub:** PRs, pushes, CI e releases saem das mesmas linhas do transcript (o comando e a saída dele, ou o
-  `gitOperation` que o próprio Claude Code grava); nada é consultado no GitHub.
-- **O desenho:** o navegador recebe o estado por SSE e desenha tudo num canvas — personagens, móveis, pisos e paredes
-  são pixel art **gerada por código**; já o logotipo, as ilustrações e os quadros das paredes foram gerados com IA.
+- **Who's in the office:** while a session is open, Claude Code keeps `sessions/<pid>.json` with the
+  project and the status (busy, idle, waiting on you or waiting on a background shell). That's what decides
+  who shows up and what each one does.
+- **Running shells:** in the transcripts, each background `Bash` (or long foreground command) becomes a
+  "shell" with a label and a timer, until the notification arrives that it finished, failed or was interrupted.
+- **Social life:** the hangouts, the personalities and the coins are a simulation in the browser (`client/src/world/social/`),
+  with no effect at all on the real agents. The personality comes from each agent's seed (it's the same in any
+  browser); the wallets are kept in the browser's `localStorage`.
+- **What each one is doing:** the server follows the end of the transcripts (`.jsonl`) of the open sessions and turns
+  each tool call into an activity, with an icon, in the server's language (see [Languages](#languages)). Tasks, title, model and
+  stats come from there too.
+- **Subagents:** the transcripts in `<sessão>/subagents/` (including those from workflows) become characters linked to the
+  agent that called them.
+- **GitHub:** PRs, pushes, CI and releases come from the same transcript lines (the command and its output, or the
+  `gitOperation` that Claude Code itself records); nothing is queried on GitHub.
+- **The drawing:** the browser receives the state over SSE and draws everything on a canvas — characters, furniture, floors and walls
+  are pixel art **generated by code**; the logo, the illustrations and the pictures on the walls, on the other hand, were generated with AI.
 
 <details>
-<summary><b>Estrutura do código e API</b></summary>
+<summary><b>Code structure and API</b></summary>
 
 ```
 shared/   protocolo (types.ts), atividades em PT-BR, nomes, simulador de demonstração
 server/   servidor HTTP + SSE: contas e uso, leitura das sessões e transcripts, modelo do escritório
 client/   Vite: src/art (pixel art procedural), src/world (o escritório no canvas), src/ui (interface)
 scripts/  build do servidor, docker-up, instaladores (mod, tap de statusline e hook de permissão) e screenshots
-mod/      o mod do Habblaud e o plugin de permissões (plugins do Claude Code; marketplace em .claude-plugin/)
+mod/      o mod do Habblaud e os plugins de permissões e de mensagens (plugins do Claude Code; marketplace em .claude-plugin/)
 ```
 
-| Rota | Descrição |
+| Route | Description |
 | --- | --- |
-| `GET /api/stream` | SSE com os eventos `snapshot`, `feed` e `notice` (formato em `shared/types.ts`). |
-| `GET /api/snapshot` | Estado atual do escritório. |
-| `GET /api/agents/:id` | Detalhes de um agente, com até 200 atividades. |
-| `GET /api/agents/:id/terminal` | SSE do terminal somente leitura (eventos `init` e `append`); só com acesso local. |
-| `GET /api/sessions/recent` | Histórico: sessões dos últimos 7 dias de todas as contas (até 150); só com acesso local. |
-| `GET /api/sessions/:conta/:sessionId/terminal` | SSE da conversa de uma sessão do histórico (mesmo protocolo do terminal); só com acesso local. |
-| `GET /api/stats?day=AAAA-MM-DD` | Estatísticas do Meu dia (tempo por status, projetos, contas, horas, esperas, tokens e custo). |
-| `GET /api/stats/days` | Dias com estatísticas (os últimos 30). |
-| `GET /api/timeline/days` | Dias gravados para o timelapse, com tamanho e horário do primeiro e do último registro. |
-| `GET /api/timeline/:dia` | Linha do tempo de um dia (`AAAA-MM-DD`), em JSONL (com gzip). |
-| `GET /api/health` | Saúde: versão, demonstração, Docker, terminal, responder pelo escritório, fontes e status de uso de cada conta. |
-| `POST /api/demo` | `{"enabled": true \| false}` liga ou desliga os agentes simulados. |
-| `GET /api/mod/summary` | Para o mod do Claude Code: versão, quantos agentes, quantos trabalham e quem precisa de você (sem o demo e, com `?account=&session=`, sem a própria sessão). |
-| `/api/permissions…` | Responder pelo escritório: o hook de permissão registra o pedido e espera; a página busca o detalhe e decide. Só com acesso local. |
+| `GET /api/stream` | SSE with the `snapshot`, `feed` and `notice` events (format in `shared/types.ts`). |
+| `GET /api/snapshot` | Current state of the office. |
+| `GET /api/agents/:id` | An agent's details, with up to 200 activities. |
+| `GET /api/agents/:id/terminal` | Terminal SSE (`init` and `append` events); local access only. |
+| `PUT /api/agents/:id/character` | Edit the character: `{name, seed, parts}` saves the main agent's name and look as the project's (the room's) character; local access only. |
+| `DELETE /api/agents/:id/character` | "Back to random": deletes the project's character and the agent goes back to its random name; local access only. |
+| `GET /api/sessions/recent` | Session history: sessions from the last 7 days across all accounts (up to 150); local access only. |
+| `GET /api/sessions/:conta/:sessionId/terminal` | SSE of the conversation of a session from the history (same protocol as the terminal); local access only. |
+| `GET /api/stats?day=AAAA-MM-DD` | My day stats (time per status, projects, accounts, hours, waits, tokens and cost). |
+| `GET /api/stats/days` | Days with stats (the last 30). |
+| `GET /api/timeline/days` | Days recorded for the timelapse, with size and the time of the first and last entries. |
+| `GET /api/timeline/:dia` | A day's timeline (`AAAA-MM-DD`), in JSONL (gzipped). |
+| `GET /api/health` | Health: version, demo, Docker, terminal, answering and sending messages from the office, sources and usage status of each account. |
+| `POST /api/demo` | `{"enabled": true \| false}` turns the simulated agents on or off. |
+| `POST /api/rooms/rename` | `{"id": sala, "name": nome}` renames the room (empty goes back to the folder name); the name is stored in `rooms.json`, in the data folder. Local access only. |
+| `GET /api/mod/summary` | For the Claude Code mod: version, how many agents, how many are working and who needs you (without the demo and, with `?account=&session=`, without its own session). |
+| `/api/permissions…` | Answering from the office: the permission hook registers the request (permission or question) and waits; the page fetches the details and decides or answers. Local access only. |
+| `/api/messages…` and `/api/mod/inbox…` | Sending messages: the page puts the message in the queue and follows its delivery; the `habblaud-mensagens` plugin fetches it, delivers it to the session and confirms. Local access only. |
+| `POST /api/codex/events` | Events from the Codex hooks (session opened, tool, approval, end of turn). Local access only. |
+| `/api/codex/bridge/poll` and `/ack` | `npm run codex:bridge` fetches the messages for Codex and confirms delivery. Local access only. |
 
-Mais detalhes do servidor em [`server/README.md`](server/README.md).
+More server details in [`server/README.md`](server/README.md).
 
 </details>
 
 <details>
-<summary><b>O que o Docker monta e por quê</b></summary>
+<summary><b>What Docker mounts and why</b></summary>
 
-| Host | Container | Para quê |
+| Host | Container | What for |
 | --- | --- | --- |
-| `<conta>/sessions/` | `/claude/<conta>/sessions` (somente leitura) | Sessões abertas e seus status. |
-| `<conta>/projects/` | `/claude/<conta>/projects` (somente leitura) | Transcripts das sessões e dos subagentes. |
-| `~/.habblaud/usage/` | `/usage` (somente leitura) | Uso capturado pelo mod (ou pelo tap de statusline). |
-| volume `habblaud-data` | `/data` | Dados do próprio Habblaud (nomes dos personagens, linha do tempo do timelapse e estatísticas do Meu dia). |
+| `<conta>/sessions/` | `/claude/<conta>/sessions` (read-only) | Open sessions and their status. |
+| `<conta>/projects/` | `/claude/<conta>/projects` (read-only) | Transcripts of the sessions and subagents. |
+| `~/.habblaud/usage/` | `/usage` (read-only) | Usage captured by the mod (or by the statusline tap). |
+| `habblaud-data` volume | `/data` | Habblaud's own data (character names, the timelapse timeline and the My day stats). |
+| `~/.habblaud/remote-tls/server/` | `/remote-tls` (read-only) | Only after `npm run remote:setup`: the server certificate and key of the [phone with login](#phone-with-login-and-https-approving-requests) (never the CA key). |
 
-A pasta da conta **nunca** é montada inteira (lá ficam credenciais e configurações). O container roda como usuário sem
-privilégios, com sistema de arquivos somente leitura, sem capabilities extras e com `no-new-privileges`. Os metadados
-das contas (letra, e-mail, organização) são lidos no host pelo `docker:up` e passados ao container.
+The account folder is **never** mounted whole (credentials and settings live there). The container runs as an unprivileged
+user, with a read-only file system, no extra capabilities and with `no-new-privileges`. The accounts'
+metadata (letter, email, organization) is read on the host by `docker:up` and passed to the container.
 
 </details>
 
-## Privacidade e segurança
+## Privacy and security
 
-- **Só leitura:** o Habblaud nunca grava nas pastas do Claude Code. As exceções são os instaladores, que você roda:
-  o `npm run mod:install` / `mod:uninstall` usa o próprio `claude plugin` (que registra o marketplace e os plugins
-  no `settings.json` e em `<conta>/plugins/`) e, na instalação, tira o tap e o hook antigos com backup; no jeito
-  antigo, o `npm run usage:install` / `usage:uninstall` muda só o `statusLine.command` do `settings.json` e o
-  `npm run hooks:install` / `hooks:uninstall`, só a lista `hooks.PermissionRequest` — sempre com backup antes.
-- **O mod:** roda dentro de cada sessão do Claude Code, com as suas permissões (como todo mod), e faz só o que está
-  listado em [`mod/README.md`](mod/README.md) — `claude plugin validate mod/habblaud` mostra os eventos e as chamadas,
-  sem rodar nada. Grava só os percentuais de uso de 5 horas e da semana (e quando reiniciam) em
-  `~/.habblaud/usage/<conta>.json`; para a linha de "precisa de você" e o `/habblaud`, só fala com o Habblaud em
-  `127.0.0.1`. Não lê a conversa, não chama o modelo e não envia nada para fora do computador. Ele é lido desta
-  pasta: o que estiver nela (inclusive depois de um `git pull`) é o que roda.
-- **Só local, por padrão:** o servidor só aceita conexões do próprio computador; liberar a rede local é opcional.
-  Não há telemetria. A única chamada externa é a verificação de versão nova: a cada 6 horas, uma consulta anônima,
-  sem token, à API pública do GitHub (`api.github.com/repos/marmottajr/habblaud/releases/latest`). Ela não envia nada
-  sobre as suas sessões; o GitHub vê só o seu IP e a versão em uso, que vai no `User-Agent`.
-  `HABBLAUD_UPDATE_CHECK=0` desliga a consulta.
-- **Sem credenciais:** o Habblaud não lê senhas nem tokens de acesso. Do `.claude.json` de cada conta aproveita só o
-  e-mail, a organização e o cache do `/usage`; o uso ao vivo vem do mod (ou do tap de statusline).
-- **Segredos mascarados:** tokens e senhas com formato conhecido (`Bearer`, `-u usuário:senha`, `TOKEN=`, chaves
-  `sk-…`, `ghp_…`, `AKIA…`, JWTs, senhas em URLs) viram `***` antes de chegar ao navegador.
-- **Protegido contra sites maliciosos:** o servidor recusa endereços que não sejam `localhost`/IP (DNS rebinding) e
-  `POST` vindos de outras origens (CSRF), e não deixa a página ser embutida em outros sites.
-- **Terminal somente leitura só local:** a conversa completa das sessões (e o histórico das sessões encerradas, com os
-  títulos) só sai do servidor com o Habblaud acessível apenas pelo próprio computador (`HABBLAUD_HOST` local no Node;
-  `HABBLAUD_BIND` local no Docker) — não há como
-  ligá-lo com a porta exposta — e cada pedido precisa vir por `localhost`/`127.0.0.1`: IPs da rede e nomes de
-  `HABBLAUD_ALLOWED_HOSTS` (proxies, túneis) são recusados. Segredos são mascarados e textos longos truncados antes
-  de chegar ao navegador; no modo demonstração, a conversa é fictícia. `HABBLAUD_TERMINAL=0` desliga de vez.
-- **Linha do tempo do timelapse:** só os resumos que já aparecem na tela (atividade em uma linha, status, títulos,
-  uso das contas, sem e-mails, comandos completos ou conversas), gravados em `~/.habblaud/timeline/` e apagados depois
-  de 7 dias. `HABBLAUD_TIMELINE=0` desliga a gravação.
-- **Responder pelo escritório, só local:** aprovar ou recusar age sobre as sessões, então segue a mesma trava do
-  terminal (bind local, `Host` local, nada de proxies ou túneis) e só existe com o hook de permissão (o do plugin
-  `habblaud-permissoes` ou o do jeito antigo) instalado por você. As respostas exigem JSON e origem local (um site
-  aberto no navegador não consegue mandá-las), o hook só fala com `127.0.0.1` e, na dúvida — Habblaud fora do ar,
-  erro, tempo esgotado —, sai sem decidir: vale o terminal. O comando completo ou o diff só saem do servidor para
-  quem abriu a página pelo próprio computador. "Sempre permitir" só aplica uma regra que o próprio Claude Code sugeriu
-  para aquele pedido. Atenção: qualquer programa ou pessoa que consiga abrir `http://localhost:4747` nesta máquina
-  também consegue responder; em computadores compartilhados com outros usuários, não instale o hook
+- **Read-only:** Habblaud never writes to the Claude Code folders. The exceptions are the installers, which you run:
+  `npm run mod:install` / `mod:uninstall` uses `claude plugin` itself (which registers the marketplace and the plugins
+  in `settings.json` and in `<conta>/plugins/`) and, on install, removes the old tap and hook with a backup; in the old
+  way, `npm run usage:install` / `usage:uninstall` changes only the `statusLine.command` in `settings.json` and
+  `npm run hooks:install` / `hooks:uninstall`, only the `hooks.PermissionRequest` list — always with a backup first.
+- **The mod:** runs inside each Claude Code session, with your permissions (like every mod), and only does what is
+  listed in [`mod/README.md`](mod/README.md) — `claude plugin validate mod/habblaud` shows the events and the calls,
+  without running anything. It only writes the 5-hour and weekly usage percentages (and when they reset) to
+  `~/.habblaud/usage/<conta>.json`; for the "needs you" line and `/habblaud`, it only talks to Habblaud at
+  `127.0.0.1`. It doesn't read the conversation, doesn't call the model and doesn't send anything off the computer. It's loaded from this
+  folder: whatever is in it (including after a `git pull`) is what runs. The messages plugin
+  (`habblaud-mensagens`) is separate precisely because it acts: it types into the session what you sent from the office.
+- **Local only, by default:** the server only accepts connections from the computer it runs on; opening it to the local network is optional.
+  There's no telemetry. The only external call is the new-version check: every 6 hours, an anonymous request,
+  with no token, to the public GitHub API (`api.github.com/repos/marmottajr/habblaud/releases/latest`). It doesn't send anything
+  about your sessions; GitHub only sees your IP and the version in use, which goes in the `User-Agent`.
+  `HABBLAUD_UPDATE_CHECK=0` turns off the request.
+  So is the [phone with login](#phone-with-login-and-https-approving-requests), which only exists after `npm run remote:setup`.
+- **No credentials:** Habblaud doesn't read passwords or access tokens. From each account's `.claude.json` it only uses the
+  email, the organization and the `/usage` cache; live usage comes from the mod (or the statusline tap).
+- **Masked secrets:** tokens and passwords in known formats (`Bearer`, `-u usuário:senha`, `TOKEN=`, `sk-…`,
+  `ghp_…`, `AKIA…` keys, JWTs, passwords in URLs) become `***` before they reach the browser.
+- **Protected against malicious sites:** the server refuses addresses that aren't `localhost`/IP (DNS rebinding) and
+  `POST` requests coming from other origins (CSRF), and doesn't let the page be embedded in other sites.
+- **Local-only terminal:** the full conversation of the sessions (and the history of the ended sessions, with their
+  titles) only leaves the server with Habblaud reachable only from the computer it runs on (`HABBLAUD_HOST` local in Node;
+  `HABBLAUD_BIND` local in Docker) — there's no way to
+  turn it on with the port exposed — and each request has to come through `localhost`/`127.0.0.1`: network IPs and names from
+  `HABBLAUD_ALLOWED_HOSTS` (proxies, tunnels) are refused. Secrets are masked and long texts truncated before
+  they reach the browser; in demo mode, the conversation is made up. `HABBLAUD_TERMINAL=0` turns it off for good.
+  The one exception is the [phone with login](#phone-with-login-and-https-approving-requests), and only with `terminal` in `HABBLAUD_REMOTE_ALLOW`.
+- **Timelapse timeline:** only the summaries that already show up on screen (one-line activity, status, titles,
+  account usage, with no emails, full commands or conversations), written to `~/.habblaud/timeline/` and deleted after
+  7 days. `HABBLAUD_TIMELINE=0` turns off recording.
+- **Answering from the office, local only:** approving or denying acts on the sessions, so it follows the same safeguard as the
+  terminal (local bind, local `Host`, no proxies or tunnels) and only exists with the permission hook (the one from the
+  `habblaud-permissoes` plugin or the old way's) installed by you. Answers require JSON and a local origin (a site
+  open in the browser can't send them), the hook only talks to `127.0.0.1` and, when in doubt — Habblaud down,
+  an error, a timeout — it exits without deciding: the terminal decides. The full command or the diff only leaves the server for
+  whoever opened the page from the computer it runs on. "Always allow" only applies a rule that Claude Code itself suggested
+  for that request. Note: any program or person that can open `http://localhost:4747` on this machine
+  can also answer; on computers shared with other users, don't install the hook
   (`npm run mod:install -- --sem-permissoes`).
-- **Estatísticas do Meu dia:** só números agregados (tempo por status, contagens, tokens, custo) com nomes de projeto,
-  conta e agente, guardados em `HABBLAUD_DATA_DIR/stats/` por 30 dias — nada da conversa.
-- **O que aparece na tela:** resumos das atividades (ferramenta, arquivo, comando ou consulta), títulos das sessões,
-  tarefas e estatísticas (e, no terminal somente leitura, a conversa). Não exponha a porta em redes em que você não
-  confia.
+  Exception: the [phone with login](#phone-with-login-and-https-approving-requests) answers too (that is its default) and sees the same command or diff.
+- **Sending messages, local only — and with a warning:** the message goes into the session as if you had typed it, so
+  whatever the agent can do with a request of yours applies. It follows the same safeguard (local bind, local `Host`, JSON and local origin,
+  so a site open in the browser can't send one), but **any program on this machine** that talks to
+  `http://localhost:4747` — including an agent running a command — can leave a message for another session
+  that has the plugin. If that doesn't work for you (shared computer, agents running unsupervised), don't
+  install the plugin (`npm run mod:install -- --sem-mensagens`) or turn it off with `HABBLAUD_MENSAGENS=0`. The text of the
+  messages isn't saved: it disappears from the server as soon as it's delivered.
+  From the [phone with login](#phone-with-login-and-https-approving-requests), only with `messages` in `HABBLAUD_REMOTE_ALLOW`.
+- **Interactive terminal, opt-in — and with a warning:** with `HABBLAUD_PTY=1`, the office opens Claude Code in
+  any folder, types into it (including `!comando`, which runs in the shell) and ends or takes over sessions open in other
+  terminals. It follows the same safeguard as the terminal (local bind, local `Host`, no proxies or tunnels) and each request
+  has to come from the computer it runs on, with a local origin (a site open in the browser can't send one). Even so,
+  **any program on this machine** that talks to `http://localhost:4747` — including an agent running a command —
+  gets that power. Before ending a process from outside, Habblaud checks in the session registry and in the system that
+  that PID is still that Claude Code (same start time and executable). On shared computers or with agents
+  running unsupervised, leave it off.
+- **Phone with login, opt-in:** only exists after `npm run remote:setup`. A second port with HTTPS (a local CA that only
+  signs `.local` names, `localhost`, your own address and private IPs), a username and a password (only the scrypt
+  hash is stored); the session is an `HttpOnly`, `SameSite=Strict`, `Secure` cookie signed with HMAC. On that port,
+  what is allowed comes from `HABBLAUD_REMOTE_ALLOW` (by default, only answering permission requests), never from the
+  Host header; the routes of the hooks, the plugins and the host helper, the interactive terminal, the character editor
+  and renaming rooms never work through it. Whoever has the password gets what you allowed: choose a strong one and
+  allow only what you need. The CA key stays in `~/.habblaud/remote-tls/ca` and never goes into the container.
+- **New agent, opt-in:** with `HABBLAUD_PTY=1`, the office starts Claude Code sessions with the request you wrote, in
+  the folder you choose — the same warning as the interactive terminal applies. Attachments are written to
+  `~/.habblaud/attachments/` (folder 700, files 600). In Docker, whoever starts the sessions is the host helper
+  (`npm run codex:bridge`), which also reads the delivery files only from known project folders (the ones Claude Code
+  has in `<conta>/projects`), the temporary folder and the attachments.
+- **Character editor, local only:** saving or going back to random changes the office and writes to `names.json`, so it
+  follows the same safeguard as the terminal (local bind, local `Host`, no proxies or tunnels): without it, the pencil doesn't show up
+  and the server answers `403`. Changes require JSON and a local origin. `HABBLAUD_TERMINAL=0` turns it off too.
+- **My day stats:** only aggregate numbers (time per status, counts, tokens, cost) with project,
+  account and agent names, kept in `HABBLAUD_DATA_DIR/stats/` for 30 days — nothing from the conversation.
+- **Codex:** Habblaud only reads the conversations (`sessions/`, `archived_sessions/`) and the locks of the open sessions
+  (`thread-writer-locks/`); in Docker, only those three folders are mounted, read-only. It never reads `auth.json`,
+  `config.toml`, the shell environment (`shell_snapshots/`), the prompt history, the logs or the Codex databases, and doesn't
+  show the ChatGPT account ids. `npm run codex:install` only adds groups to `hooks.json` (with a backup; those from
+  other apps stay where they are) and writes `~/.habblaud/codex-hook.json`; approving the hooks is always up to you, in
+  `/hooks`. The hooks only talk to `127.0.0.1`. Messages to Codex carry the same warning as those to Claude Code: any
+  program on this machine that talks to Habblaud can leave a message in a session's queue.
+- **OpenCode:** OpenCode only keeps its sessions in a SQLite database, so this is the only case where Habblaud opens a
+  SQLite, always read-only and only the `project`, `session`, `message`, `part` and `todo` tables. From the content
+  columns it asks only for the role, the times, the part type, the tool name and its short title: the message text, the
+  tools' input and output and the reasoning never reach Habblaud. It never opens `auth.json`, the configuration
+  (`opencode.jsonc`), the logs or the rest of the database (`account`, `event`).
+- **What shows up on screen:** activity summaries (tool, file, command or query), session titles,
+  tasks and stats (and, in the terminal, the conversation). Don't expose the port on networks you don't
+  trust.
 
-## Desenvolvimento
+## Development
 
-| Comando | O que faz |
+| Command | What it does |
 | --- | --- |
-| `npm run dev` | Servidor + Vite em http://localhost:4747, com recarga automática. |
-| `npm run dev:client` | Só o Vite, em http://localhost:5173 (abra com `?mock=1`; `/api` é repassado para a porta 4747). |
-| `npm run demo` | `npm run dev` com o modo demonstração ligado. |
-| `npm run build` / `npm start` | Compila e roda a versão de produção. |
-| `npm test` | Testes (Vitest). |
-| `npm run typecheck` | Verificação de tipos de cliente, servidor e scripts. |
-| `claude plugin test mod/habblaud` | Testes do mod (sem sessão, conta nem rede). |
-| `claude plugin validate .` | Valida o marketplace (`.claude-plugin/marketplace.json`); com `mod/habblaud` ou `mod/habblaud-permissoes`, valida o plugin e lista os eventos e as chamadas do mod. |
-| `claude --plugin-dir mod/habblaud` | Abre uma sessão com o mod desta pasta, sem instalar (edite e rode `/reload-plugins`). |
-| `npm run mod:status` | Mostra, por conta, o marketplace, os plugins e as versões instaladas. |
-| `npm run demo:timeline` | Gera uma linha do tempo fictícia (simulador do modo demonstração) para o timelapse. |
-| `npm run release` | Publica a versão do `package.json` no GitHub (tag e release com as notas do `CHANGELOG.md`). |
+| `npm run dev` | Server + Vite at http://localhost:4747, with hot reload. |
+| `npm run dev:client` | Vite only, at http://localhost:5173 (open it with `?mock=1`; `/api` is proxied to port 4747). |
+| `npm run demo` | `npm run dev` with demo mode on. |
+| `npm run build` / `npm start` | Builds and runs the production version. |
+| `npm test` | Tests (Vitest). |
+| `npm run typecheck` | Type checking for the client, the server and the scripts. |
+| `claude plugin test mod/habblaud` | Mod tests (no session, account or network); same for `mod/habblaud-mensagens`. |
+| `claude plugin validate .` | Validates the marketplace (`.claude-plugin/marketplace.json`); with `mod/habblaud`, `mod/habblaud-permissoes` or `mod/habblaud-mensagens`, validates the plugin and lists the mod's events and calls. |
+| `claude --plugin-dir mod/habblaud` | Opens a session with the mod from this folder, without installing it (edit and run `/reload-plugins`). |
+| `npm run mod:status` | Shows, per account, the marketplace, the plugins and the installed versions. |
+| `npm run demo:timeline` | Generates a made-up timeline (demo mode simulator) for the timelapse. |
+| `npm run release` | Publishes the `package.json` version on GitHub (tag and release with the notes from `CHANGELOG.md`). |
 
-Para tirar screenshots sem abrir o seu navegador, `scripts/shot.mjs` usa um Chromium headless isolado (Playwright).
-Na primeira vez, baixe o navegador (uma vez só): `npx playwright-core install chromium-headless-shell`.
+To take screenshots without opening your browser, `scripts/shot.mjs` uses an isolated headless Chromium (Playwright).
+The first time, download the browser (just once): `npx playwright-core install chromium-headless-shell`.
 
 ```bash
 node scripts/shot.mjs 'http://localhost:4747/?mock=1&speed=3' /tmp/habblaud.png --size 1400x900 --wait 4000
 ```
 
-No console do navegador, `habblaud.world.debug` tem ferramentas para testar cenas (ex.:
-`habblaud.world.debug.setHour(21)` para ver a noite). Para fixar a hora já ao abrir, use `?hora=21:30` na URL.
+In the browser console, `habblaud.world.debug` has tools for testing scenes (e.g.
+`habblaud.world.debug.setHour(21)` to see the night). To set the time right when it opens, use `?hora=21:30` in the URL.
 
-**Timelapse só com dados fictícios** (ex.: para gravar um GIF): `npm run demo:timeline` roda o simulador do modo
-demonstração offline e grava um dia inteiro (por padrão, ontem das 9h às 19h, com manhã cheia, almoço mais vazio e
-pico à tarde) em `<tmp>/habblaud-demo/timeline/`. Depois suba um Habblaud que só leia essa pasta e não mostre as suas
-sessões, e abra o Timelapse:
+**Timelapse with made-up data only** (e.g. to record a GIF): `npm run demo:timeline` runs the demo mode
+simulator offline and records a whole day (by default, yesterday from 9 a.m. to 7 p.m., with a busy morning, a quieter lunch and a
+peak in the afternoon) in `<tmp>/habblaud-demo/timeline/`. Then start a Habblaud that only reads that folder and doesn't show your
+sessions, and open the Timelapse:
 
 ```bash
 npm run demo:timeline -- --data-dir /tmp/habblaud-demo        # opções: --date, --start 8:30, --hours, --sessions, --seed
@@ -673,207 +980,233 @@ HABBLAUD_DATA_DIR=/tmp/habblaud-demo HABBLAUD_TIMELINE=0 HABBLAUD_CLAUDE_DIRS=/t
   HABBLAUD_PORT=4848 npm start                                 # depois de npm run build; abra http://localhost:4848
 ```
 
-`HABBLAUD_TIMELINE=0` evita gravar nessa pasta; com a gravação ligada, dias com mais de 7 dias são apagados.
+`HABBLAUD_TIMELINE=0` avoids writing to that folder; with recording on, days older than 7 days are deleted.
 
-**Publicar uma versão:** toda versão tem a sua seção no [`CHANGELOG.md`](CHANGELOG.md), com o que entrou. Durante o
-trabalho, anote as mudanças em "Não lançado". Para lançar:
+**Publishing a version:** every version has its own section in [`CHANGELOG.md`](CHANGELOG.md), with what went in. While
+working, note the changes under "Não lançado" (Unreleased). To release:
 
-1. Suba o número com `npm version minor --no-git-tag-version` (ou `patch`, numa versão só de correções).
-2. Troque "Não lançado" pela versão e a data (`## [0.3.0] - AAAA-MM-DD`), deixe um "Não lançado" vazio em cima e
-   atualize os links do fim. O `npm test` falha se a versão do `package.json` não tiver seção.
-3. Faça o merge na `main` e rode `npm run release` (precisa do [`gh`](https://cli.github.com/) autenticado; `-- --dry-run`
-   só mostra as notas). O script cria a tag `v0.3.0` e a release com o texto da seção. A partir daí, quem usa o
-   Habblaud vê o selo **Nova versão**.
+1. Bump the number with `npm version minor --no-git-tag-version` (or `patch`, for a bug-fix-only version).
+2. Replace "Não lançado" with the version and the date (`## [0.3.0] - AAAA-MM-DD`), leave an empty "Não lançado" above it and
+   update the links at the end. `npm test` fails if the `package.json` version doesn't have a section.
+3. Merge into `main` and run `npm run release` (it needs an authenticated [`gh`](https://cli.github.com/); `-- --dry-run`
+   only shows the notes). The script creates the `v0.3.0` tag and the release with the section's text. From then on, Habblaud
+   users see the **New version** badge.
 
-## Solução de problemas
+## Troubleshooting
 
 <details>
-<summary><b>O escritório está vazio</b></summary>
+<summary><b>The office is empty</b></summary>
 
-Só aparecem sessões **abertas** do Claude Code. Confira se há alguma rodando e se a conta foi detectada em
-`http://localhost:4747/api/health`. Se as pastas das contas estiverem em outro lugar, use
+Only **open** Claude Code sessions show up. Check whether there's one running and whether the account was detected at
+`http://localhost:4747/api/health`. If the account folders are somewhere else, use
 `HABBLAUD_CLAUDE_DIRS=/caminho/conta1,/caminho/conta2`.
 
 </details>
 
 <details>
-<summary><b>O uso aparece como "sem dados" ou "desatualizado"</b></summary>
+<summary><b>Usage shows "no data" or "outdated"</b></summary>
 
-Rode `npm run mod:install` (ou, no Claude Code anterior ao 2.1.287, `npm run usage:install`) e confira com
-`npm run mod:status` (ou `npm run usage:status`). Os números chegam depois da próxima resposta numa sessão aberta
-daquela conta; numa sessão aberta antes da instalação, rode `/reload-plugins` ou reabra a sessão. Um **—** no lugar
-do percentual quer dizer que a janela reiniciou desde a última coleta.
+Run `npm run mod:install` (or, on Claude Code older than 2.1.287, `npm run usage:install`) and check with
+`npm run mod:status` (or `npm run usage:status`). The numbers arrive after the next reply in an open session
+of that account; in a session opened before the install, run `/reload-plugins` or reopen the session. A **—** in place
+of the percentage means the window has reset since the last collection.
 
 </details>
 
 <details>
-<summary><b>O mod não carrega numa sessão</b></summary>
+<summary><b>The mod doesn't load in a session</b></summary>
 
-Rode `npm run mod:status`: ele mostra a versão do Claude Code (o mod precisa da 2.1.287 ou mais nova) e, por conta,
-se o marketplace aponta para esta pasta e se os plugins estão instalados e ligados. Numa sessão aberta antes da
-instalação, rode `/reload-plugins`; o `/plugin` mostra, embaixo das abas, os mods carregados (ex.:
-`1 mod active · habblaud`). Mods não rodam com `"disableAllHooks": true` no `settings.json` da conta nem com
+Run `npm run mod:status`: it shows the Claude Code version (the mod needs 2.1.287 or newer) and, per account,
+whether the marketplace points to this folder and whether the plugins are installed and enabled. In a session opened before the
+install, run `/reload-plugins`; `/plugin` shows, below the tabs, the loaded mods (e.g.
+`1 mod active · habblaud`). Mods don't run with `"disableAllHooks": true` in the account's `settings.json` or with
 `claude --safe-mode`.
 
 </details>
 
 <details>
-<summary><b>"A porta 4747 já está em uso"</b></summary>
+<summary><b>"Port 4747 is already in use"</b></summary>
 
-Outro Habblaud (Node ou Docker) já está rodando. Pare-o (`npm run docker:down`, ou Ctrl+C no terminal do
-`npm start`) ou use outra porta: `HABBLAUD_PORT=4848 npm run docker:up` (Docker) ou `HABBLAUD_PORT=4848 npm start`
+Another Habblaud (Node or Docker) is already running. Stop it (`npm run docker:down`, or Ctrl+C in the
+`npm start` terminal) or use another port: `HABBLAUD_PORT=4848 npm run docker:up` (Docker) or `HABBLAUD_PORT=4848 npm start`
 (Node).
 
 </details>
 
 <details>
-<summary><b>Não abre no celular</b></summary>
+<summary><b>It doesn't open on my phone</b></summary>
 
-Confira se criou o `.env` com `HABBLAUD_BIND=0.0.0.0` e recriou o container (`npm run docker:up -- --no-build`), se
-o celular está no mesmo Wi-Fi e se o firewall do computador permite conexões na porta 4747. Por IP funciona direto;
-para abrir por um nome (ex.: `meu-mac.local`), acrescente `HABBLAUD_ALLOWED_HOSTS=meu-mac.local` (no Docker, no mesmo
+Check that you created `.env` with `HABBLAUD_BIND=0.0.0.0` and recreated the container (`npm run docker:up -- --no-build`), that
+the phone is on the same Wi-Fi and that the computer's firewall allows connections on port 4747. By IP it works right away;
+to open it by a name (e.g. `meu-mac.local`), add `HABBLAUD_ALLOWED_HOSTS=meu-mac.local` (in Docker, in the same
 `.env`).
 
 </details>
 
 <details>
-<summary><b>O terminal somente leitura não abre</b></summary>
+<summary><b>The terminal doesn't open</b></summary>
 
-O terminal só existe com o Habblaud acessível apenas pelo próprio computador. Confira se o `.env` não tem
-`HABBLAUD_BIND=0.0.0.0` (ou, no modo Node, se não usou `HABBLAUD_HOST=0.0.0.0`) nem `HABBLAUD_TERMINAL=0`, e abra por
-`http://localhost:4747` (pelo IP da rede ou por um nome de `HABBLAUD_ALLOWED_HOSTS` ele é recusado). No Docker, um container
-criado antes desse recurso precisa ser recriado: `npm run docker:up`. O log de inicialização (`npm run docker:logs`)
-diz se o terminal está ligado e, se não estiver, por quê.
-
-</details>
-
-<details>
-<summary><b>O pedido de permissão não aparece no escritório</b></summary>
-
-Rode `npm run mod:status`: ele diz, por conta, se o plugin `habblaud-permissoes` está instalado e ligado (e se
-sobrou o hook antigo junto, o que faria dois responderem) e se o Habblaud está respondendo pedidos. No jeito antigo,
-`npm run hooks:status` diz se o hook está instalado e apontando para esta pasta. O pedido só é desviado com alguma
-página do Habblaud aberta por `http://localhost` (ou `127.0.0.1`) e com o terminal somente leitura ligado (mesma
-trava). Sessões abertas antes da instalação carregam o plugin com `/reload-plugins` (ou ao reabrir). No jeito antigo,
-se o Habblaud usa outra porta, reinstale com `npm run hooks:install -- --port <porta>`. Perguntas do agente
-(`AskUserQuestion`) não passam pelo hook.
+The terminal only exists with Habblaud reachable only from the computer it runs on. Check that `.env` doesn't have
+`HABBLAUD_BIND=0.0.0.0` (or, in Node mode, that you didn't use `HABBLAUD_HOST=0.0.0.0`) or `HABBLAUD_TERMINAL=0`, and open it through
+`http://localhost:4747` (through the network IP or a name from `HABBLAUD_ALLOWED_HOSTS` it's refused). In Docker, a container
+created before this feature needs to be recreated: `npm run docker:up`. The startup log (`npm run docker:logs`)
+says whether the terminal is on and, if it isn't, why.
 
 </details>
 
 <details>
-<summary><b>No Docker, uma sessão fechada continua no escritório</b></summary>
+<summary><b>The permission request (or the question) doesn't show up in the office</b></summary>
 
-Acontece se o Claude Code foi encerrado à força sem apagar o próprio registro em `sessions/` (no Docker não dá para
-conferir se o processo ainda existe). Rodando com Node (`npm start`), o Habblaud confere os processos e isso não
-acontece.
-
-</details>
-
-<details>
-<summary><b>No Docker, uma conta fora de /Users não aparece</b></summary>
-
-O Docker Desktop só compartilha algumas pastas do Mac com os containers (por padrão `/Users`, `/Volumes`, `/private` e
-`/tmp`). Adicione a pasta em *Settings › Resources › File sharing*.
+Run `npm run mod:status`: it says, per account, whether the `habblaud-permissoes` plugin is installed and enabled (and whether
+the old hook was left alongside it, which would make two of them answer) and whether Habblaud is handling requests. In the old way,
+`npm run hooks:status` says whether the hook is installed and pointing to this folder. The request is only diverted with some
+Habblaud page opened through `http://localhost` (or `127.0.0.1`) and with the terminal on (same safeguard). Sessions
+opened before the install load the plugin with `/reload-plugins` (or when reopened). In the old way, if Habblaud
+uses another port, reinstall with `npm run hooks:install -- --port <porta>`. For the agent's questions, the plugin
+must be from 0.6.0 or newer: run `npm run mod:install` after updating.
 
 </details>
 
 <details>
-<summary><b>Quero começar do zero</b></summary>
+<summary><b>Codex doesn't show up in the office (or shows up with a delay)</b></summary>
 
-`npm run docker:down`, depois `docker volume rm habblaud_habblaud-data` (apaga os nomes guardados) e
+The startup log (`npm run docker:logs`) says how many Codex accounts Habblaud found; if it's none, point to the
+folder with `HABBLAUD_CODEX_DIRS` (and run `npm run docker:up` again: in Docker, only the folders that existed at
+`docker:up` are mounted). Without the hooks, Codex shows up through its files, which are only written after each step:
+run `npm run codex:install`, **approve the hooks in `/hooks` in Codex** and check with `npm run codex:status`. Codex runs
+the hooks through the login shell, which may have an old Node; `codex:install` picks a Node 22+ and tells you which one (or use
+`--node <caminho>`). A freshly opened CLI session only shows up with the **first message**: before that, Codex doesn't
+say which folder it's in (it only creates the session lock), and without the folder there's no room.
+
+</details>
+
+<details>
+<summary><b>The message box doesn't show up (or stays queued)</b></summary>
+
+The box only shows up for main agents whose session has the `habblaud-mensagens` plugin connected: run
+`npm run mod:status` (it says, per account, whether the plugin is installed and whether Habblaud has messages turned on) and, in
+sessions opened before the install, `/reload-plugins`. Without the plugin, the agent's details show the install
+hint. Messages follow the terminal's safeguard and `HABBLAUD_MENSAGENS=0` turns them off; the startup log
+(`npm run docker:logs`) says whether they're on and, if they aren't, why. A message that stays **queued** and fails
+with "the session didn't fetch the message" means the session stopped asking Habblaud (it closed, or the plugin was
+turned off).
+
+</details>
+
+<details>
+<summary><b>In Docker, a closed session stays in the office</b></summary>
+
+This happens if Claude Code was force-quit without deleting its own entry in `sessions/` (in Docker there's no way to
+check whether the process still exists). Running with Node (`npm start`), Habblaud checks the processes and this doesn't
+happen.
+
+</details>
+
+<details>
+<summary><b>In Docker, an account outside /Users doesn't show up</b></summary>
+
+Docker Desktop only shares some Mac folders with containers (by default `/Users`, `/Volumes`, `/private` and
+`/tmp`). Add the folder in *Settings › Resources › File sharing*.
+
+</details>
+
+<details>
+<summary><b>I want to start from scratch</b></summary>
+
+`npm run docker:down`, then `docker volume rm habblaud_habblaud-data` (deletes the saved names) and
 `npm run docker:up`.
 
 </details>
 
-## Aviso
+## Disclaimer
 
-O Habblaud é um projeto independente, **não afiliado, patrocinado nem endossado pela Anthropic**. "Claude" e
-"Claude Code" são marcas da Anthropic, usadas aqui só para descrever com o que o projeto funciona.
+Habblaud is an independent project, **not affiliated with, sponsored or endorsed by Anthropic**. "Claude" and
+"Claude Code" are trademarks of Anthropic, used here only to describe what the project works with.
 
-Para mostrar os agentes, o Habblaud lê apenas arquivos locais que o próprio Claude Code grava na sua máquina
-(registros das sessões abertas, transcripts e configurações das contas). Esse formato não é documentado e pode mudar entre versões do Claude Code:
-depois de uma atualização, o Habblaud pode deixar de funcionar, total ou parcialmente, até ser ajustado.
+To show the agents, Habblaud only reads local files that Claude Code itself writes on your machine
+(records of the open sessions, transcripts and account settings). This format isn't documented and may change between Claude Code versions:
+after an update, Habblaud may stop working, fully or partially, until it's adjusted.
 
-## Licença
+## License
 
-[MIT](LICENSE). As imagens em `client/public/assets` (logotipo, ilustrações, quadros e pôsteres) foram geradas com
-IA para este projeto e convertidas em pixel art pelos scripts de `scripts/assets/`.
+[MIT](LICENSE). The images in `client/public/assets` (logo, illustrations, pictures and posters) were generated with
+AI for this project and converted into pixel art by the scripts in `scripts/assets/`.
 
-## Vida social
+## Social life
 
-Quando dois ou mais agentes estão à toa — ociosos, ou esperando um shell há mais de 40 segundos —, eles param de
-passear sozinhos e se juntam. Ninguém combina nada: cada personagem tem uma **personalidade**, **amigos** e
-**rivais**, e isso decide o que ele prefere fazer, com quem e o que fala. Quem está esperando um shell só sai da mesa
-para uma roda (sozinho, continua na pipoca) e leva a ampulheta junto; quando o comando termina — ou quando você manda
-um pedido novo para alguém —, ele avisa a turma ("Opa, me chamaram! 🏃") e corre de volta para a mesa.
+When two or more agents have nothing to do — idle, or waiting on a shell for more than 40 seconds — they stop
+wandering around alone and get together. Nobody plans anything: each character has a **personality**, **friends** and
+**rivals**, and that decides what it prefers to do, with whom and what it says. Someone waiting on a shell only leaves the desk
+for a hangout (alone, it sticks with the popcorn) and takes the hourglass along; when the command finishes — or when you send
+a new request to someone — it lets the group know ("Oops, they're calling me! 🏃") and runs back to its desk.
 
 <p align="center">
-  <img src="docs/screenshots/social-lounge.gif" width="816" alt="Lounge do Habblaud com três rodas ao mesmo tempo: três colegas no sofá vendo futebol na TV (a tela pisca GOL), uma partida de pingue-pongue com torcida e um duelo nos fliperamas com provocações nos balões" />
+  <img src="docs/screenshots/social-lounge.gif" width="816" alt="Habblaud lounge with three hangouts at once: three coworkers on the couch watching soccer on TV (the screen flashes GOL), a ping-pong match with fans and an arcade duel with trash talk in the bubbles" />
 </p>
 
-### As rodas
+### The hangouts
 
-| | Roda | O que acontece |
+| | Hangout | What happens |
 | --- | --- | --- |
-| 📺 | **TV no lounge** | Futebol, novela ou desenho, com pipoca no sofá. No futebol a torcida comemora junto com o "GOL" que pisca na tela (ou lamenta o gol do adversário); na novela, coraçõezinhos e "Não acredito! 😱". Quem é de sonecas acaba dormindo no sofá. |
-| 🎮 | **Videogame** | Dois no sofá com o controle, a TV em tela dividida (corrida ou luta), melhor de 3, provocações ("Que lag é esse?!") e torcida. |
-| 👾 | **Fliperama** | Duelo nas duas máquinas do lounge, uma partida só. |
-| 🏓 | **Pingue-pongue** | Até 5 pontos, com a bolinha indo e voltando, placar nos balões ("3 × 2 🏓") e torcida atrás da mesa. |
-| ☕ | **Papo na copa** | Cada um pega um café (ou água) e senta à mesa: fofoca com o nome dos colegas ("Viram o commit de Rafaela? 👀"), piada (a roda gargalha), trabalho ("Deploy na sexta? 😈") e assuntos do dia e da hora ("Sextou! 🎉"). |
-| 💬 | **Conversa** | Dois colegas em pé num canto da recepção, da copa ou do lounge. |
-| ✊ | **Jokenpô valendo** | "Jo… ken… pô!", os gestos aparecem sobre a cabeça, quem ganha comemora e as moedinhas voam de um para o outro; quem perde fica chateado e, se for competitivo, pede revanche. Empate repete. Quem está passando pode parar para assistir. |
-| 💄 | **Espelho do banheiro** | Batom ou pente, com o rosto refletido no espelho e um brilho no final. Vale sozinho ou em dupla ("Empresta o pente?"). |
+| 📺 | **TV in the lounge** | Soccer, a soap opera or cartoons, with popcorn on the couch. During soccer the fans cheer along with the "GOL" flashing on the screen (or groan at the other team's goal); during the soap opera, little hearts and "No way! 😱". Nap lovers end up falling asleep on the couch. |
+| 🎮 | **Video games** | Two on the couch with controllers, the TV in split screen (racing or fighting), best of 3, trash talk ("What's with this lag?!") and fans. |
+| 👾 | **Arcade** | A duel at the lounge's two machines, a single match. |
+| 🏓 | **Ping-pong** | Up to 5 points, with the ball going back and forth, the score in the bubbles ("3 × 2 🏓") and fans behind the table. |
+| ☕ | **Kitchen chat** | Each one grabs a coffee (or water) and sits at the table: gossip with coworkers' names ("Did you see Rafaela's commit? 👀"), jokes (the group cracks up), work talk ("Deploy on a Friday? 😈") and topics about the day and the time ("TGIF! 🎉"). |
+| 💬 | **Chat** | Two coworkers standing in a corner of the lobby, the kitchen or the lounge. |
+| ✊ | **Rock-paper-scissors for coins** | "Jo… Ken… Po!", the hand signs appear over their heads, the winner celebrates and the coins fly from one to the other; the loser gets upset and, if competitive, asks for a rematch. A tie goes again. Anyone walking by may stop to watch. |
+| 💄 | **Bathroom mirror** | Lipstick or a comb, with the face reflected in the mirror and a sparkle at the end. Works alone or in pairs ("Can I borrow your comb?"). |
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/social-rps.png" alt="Jokenpô na recepção: Lia comemora com uma moeda sobre a cabeça e o balão 'Ganhei!', moedinhas voam de Bruna (chateada, com o ícone de pedra) para ela, '+20' e '−20' flutuando, e Iara assiste atrás" /></td>
-    <td width="50%"><img src="docs/screenshots/social-kitchen.png" alt="Papo na copa: quatro colegas sentados à mesa comprida com café, com os balões 'Vai dar certo!' e 'Hahaha'" /></td>
+    <td width="50%"><img src="docs/screenshots/social-rps.png" alt="Rock-paper-scissors in the lobby: Lia celebrates with a coin over her head and the bubble 'I won!', coins fly from Bruna (upset, with the rock icon) to her, '+20' and '−20' floating, and Iara watches from behind" /></td>
+    <td width="50%"><img src="docs/screenshots/social-kitchen.png" alt="Kitchen chat: four coworkers sitting at the long table with coffee, with the bubbles 'It'll work out!' and 'Hahaha'" /></td>
   </tr>
   <tr>
-    <td><b>Jokenpô valendo moedinhas.</b> A aposta sai da personalidade (quem é de apostas aposta alto, quem é pão-duro aposta pouco) e nunca passa do saldo de quem tem menos.</td>
-    <td><b>Papo na copa.</b> Quem fala mais é quem é mais sociável; as reações dependem do assunto (gargalhada na piada, 👀 na fofoca).</td>
+    <td><b>Rock-paper-scissors for coins.</b> The bet comes from the personality (betting lovers bet big, penny-pinchers bet little) and never goes over the balance of whoever has less.</td>
+    <td><b>Kitchen chat.</b> Whoever is more sociable talks more; the reactions depend on the topic (a big laugh at a joke, 👀 at gossip).</td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/social-mirror.png" alt="Duas colegas diante das pias do banheiro se arrumando, com os rostos refletidos nos espelhos e o balão 'Tá arrasando!'" /></td>
-    <td><img src="docs/screenshots/social-drawer.png" alt="Seção Vida social nos detalhes do agente: 'Vendo novela na TV com Bruna e Iara', 115 moedinhas, 1 vitória e 0 derrotas, os traços Vaidade e Economia, o bordão, amizades, rivalidades com o placar e o extrato" /></td>
+    <td><img src="docs/screenshots/social-mirror.png" alt="Two coworkers at the bathroom sinks freshening up, with their faces reflected in the mirrors and the bubble 'You're killing it!'" /></td>
+    <td><img src="docs/screenshots/social-drawer.png" alt="Social life section in the agent's details: 'Watching a soap opera on TV with Bruna and Iara', 115 coins, 1 win and 0 losses, the Vanity and Thrift traits, the catchphrase, friendships, rivalries with the score and the statement" /></td>
   </tr>
   <tr>
-    <td><b>No espelho.</b> Quem é de vaidade passa no banheiro sempre que pode — e aparece refletido.</td>
-    <td><b>Nos detalhes do agente.</b> O que está fazendo, a carteira, o placar, a personalidade, amizades e rivalidades (com o retrospecto) e o extrato.</td>
+    <td><b>At the mirror.</b> Vanity lovers stop by the restroom whenever they can — and show up reflected.</td>
+    <td><b>In the agent's details.</b> What it's doing, the wallet, the score, the personality, friendships and rivalries (with the head-to-head record) and the statement.</td>
   </tr>
 </table>
 
-### Personalidades
+### Personalities
 
-Cada agente tem 2 ou 3 traços, sorteados pela semente dele (é sempre a mesma pessoa, em qualquer navegador):
+Each agent has 2 or 3 traits, drawn from its seed (it's always the same person, in any browser):
 
-🏆 Competição · 🎲 Apostas · 🎮 Games · 📺 Séries e TV · 🗣️ Fofoca · 💄 Vaidade · ☕ Cafeína · 😂 Piadas · 🏓 Esporte ·
-🙈 Timidez · 💰 Economia · 😴 Sonecas · 🧘 Calma · 📚 Leitura
+🏆 Competition · 🎲 Betting · 🎮 Games · 📺 TV & shows · 🗣️ Gossip · 💄 Vanity · ☕ Caffeine · 😂 Jokes · 🏓 Sports ·
+🙈 Shyness · 💰 Thrift · 😴 Naps · 🧘 Calm · 📚 Reading
 
-Os traços mudam o que cada um escolhe (quem é de séries liga a TV, quem é de esporte chama para o ping-pong), quem
-chama (amigos se procuram; rivais se desafiam nos jogos), o que fala e até quem joga melhor. Cada um também tem um
-bordão ("Tá pago!", "Bora codar!"). Passe o mouse sobre um traço nos detalhes do agente para ver o que ele faz.
+The traits change what each one chooses (TV lovers turn on the TV, sports lovers call people over for ping-pong), whom
+they call (friends look for each other; rivals challenge each other in games), what they say and even who plays better. Each one also has a
+catchphrase ("Done and done!", "Let's code!"). Hover over a trait in the agent's details to see what it does.
 
-### Moedinhas
+### Coins
 
-Moedinhas fictícias (🪙), só para dar graça às apostas:
+Made-up coins (🪙), just to make the bets more fun:
 
 | | |
 | --- | --- |
-| **Chegou ao escritório** | 🪙100 (subagentes, 🪙30) |
-| **Tarefa concluída** (item da lista de tarefas) | +🪙10 |
-| **Pedido atendido** (fim de turno) | +🪙5 |
-| **Subagente entregou o resultado** | +🪙15 |
-| **Apostas** (jokenpô; partidas entre rivais ou com quem é de apostas) | o que perder vai para quem ganhar |
+| **Arrived at the office** | 🪙100 (subagents, 🪙30) |
+| **Task done** (item on the task list) | +🪙10 |
+| **Request handled** (end of turn) | +🪙5 |
+| **Subagent delivered the result** | +🪙15 |
+| **Bets** (rock-paper-scissors; matches between rivals or with betting lovers) | whatever the loser loses goes to the winner |
 
-Cada ganho aparece como "+🪙10" sobre a cabeça; as partidas e apostas entram no feed de atividade. O saldo, o placar
-e o extrato ficam salvos no navegador (cada navegador tem a sua economia: as apostas são sorteadas ali) e são
-esquecidos três dias depois de o agente sair.
+Each gain shows up as "+🪙10" over the head; matches and bets go into the activity feed. The balance, the score
+and the statement are saved in the browser (each browser has its own economy: the bets are drawn there) and are
+forgotten three days after the agent leaves.
 
-> Tudo isso é encenação do Habblaud: nada muda nos agentes do Claude Code, que continuam trabalhando normalmente.
+> All of this is just Habblaud putting on a show: nothing changes in the Claude Code agents, which keep working normally.
 
 ---
 
 <p align="center">
-  Feito com ☕ e muitos agentes do <a href="https://code.claude.com">Claude Code</a>.
+  Made with ☕ and lots of <a href="https://code.claude.com">Claude Code</a> agents.
 </p>

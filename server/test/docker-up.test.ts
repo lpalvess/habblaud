@@ -4,11 +4,15 @@ import type { DetectedAccount } from '../accounts/detect';
 import { legacyEnvWarning } from '../legacy';
 import {
   accountsPayload,
+  CODEX_MOUNTED_SUBDIRS,
+  codexAccountsPayload,
+  codexDisabled,
   copyVolumeArgs,
   type DockerState,
   envFileKeys,
   hostTimeZone,
   parseArgs,
+  planCodexMounts,
   planMounts,
   planUp,
   renderOverride,
@@ -25,6 +29,9 @@ const acc = (id: string, extra: Partial<DetectedAccount> = {}): DetectedAccount 
   ...extra,
 });
 
+/** Os caminhos do host aqui são escritos com `/`; no Windows, o join do planMounts os devolve com `\`. */
+const slash = (p: string) => p.replaceAll('\\', '/');
+
 describe('docker-up', () => {
   it('argumentos', () => {
     expect(parseArgs([])).toEqual({ down: false, build: true, help: false });
@@ -36,7 +43,7 @@ describe('docker-up', () => {
   it('monta só projects/ e sessions/ que existem', () => {
     const dirs = ['/Users/fulano/.claude', '/Users/fulano/.claude-conta2'];
     const exists = new Set(['/Users/fulano/.claude/projects', '/Users/fulano/.claude/sessions', '/Users/fulano/.claude-conta2/sessions']);
-    const mounts = planMounts(dirs, [acc('.claude'), acc('.claude-conta2')], (p) => (exists.has(p) ? `/real${p}` : undefined));
+    const mounts = planMounts(dirs, [acc('.claude'), acc('.claude-conta2')], (p) => (exists.has(slash(p)) ? `/real${slash(p)}` : undefined));
     expect(mounts.map((m) => m.binds)).toEqual([
       [
         { source: '/real/Users/fulano/.claude/projects', target: '/claude/.claude/projects' },
@@ -58,7 +65,7 @@ describe('docker-up', () => {
   });
 
   it('override: somente leitura, sem criar pastas no host, `$` escapado e a pasta do statusline em /usage', () => {
-    const mounts = planMounts(['/Users/fu$lano/.claude'], [acc('.claude', { email: 'a@b.c', cachedUsage: { fetchedAtMs: 1, utilization: {} } })], (p) => p);
+    const mounts = planMounts(['/Users/fu$lano/.claude'], [acc('.claude', { email: 'a@b.c', cachedUsage: { fetchedAtMs: 1, utilization: {} } })], slash);
     const yml = renderOverride(mounts, new Date('2026-10-06T00:00:00Z'), '/Users/fulano/.habblaud/usage');
     expect(yml).toContain('source: "/Users/fu$$lano/.claude/projects"');
     expect(yml).toContain('HABBLAUD_USAGE_DIR: "/usage"');
@@ -74,8 +81,43 @@ describe('docker-up', () => {
     expect(yamlString('a"b$c')).toBe('"a\\"b$$c"');
   });
 
+  it('Codex: monta SÓ sessions/, archived_sessions/ e thread-writer-locks/ (somente leitura) e passa as contas com a pasta do host', () => {
+    expect([...CODEX_MOUNTED_SUBDIRS]).toEqual(['sessions', 'archived_sessions', 'thread-writer-locks']);
+    const host = '/Users/fulano/.codex';
+    // Existem no host também auth.json, config.toml, history.jsonl, shell_snapshots/, logs e SQLite: nada disso entra.
+    const exists = new Set([`${host}/sessions`, `${host}/thread-writer-locks`, `${host}/auth.json`, `${host}/config.toml`, `${host}/shell_snapshots`, `${host}/history.jsonl`]);
+    const codexAcc: DetectedAccount = { id: '.codex', provider: 'codex', configDir: host, short: 'CX', name: 'Codex', color: '#5cc97b', plan: 'Plus' };
+    const codex = planCodexMounts([host, '/Users/fulano/.codex-vazia'], [codexAcc, { ...codexAcc, id: '.codex-vazia' }], (p) => (exists.has(slash(p)) ? `/real${slash(p)}` : undefined));
+    expect(codex.map((m) => m.binds)).toEqual([
+      [
+        { source: `/real${host}/sessions`, target: '/codex/.codex/sessions' },
+        { source: `/real${host}/thread-writer-locks`, target: '/codex/.codex/thread-writer-locks' },
+      ],
+    ]);
+    expect(codexAccountsPayload(codex)).toEqual([
+      { id: '.codex', provider: 'codex', configDir: host, mountDir: '/codex/.codex', short: 'CX', name: 'Codex', color: '#5cc97b', plan: 'Plus' },
+    ]);
+    const claude = planMounts(['/Users/fulano/.claude'], [acc('.claude')], slash);
+    const yml = renderOverride(claude, new Date(0), undefined, undefined, codex);
+    expect(yml).toContain('HABBLAUD_CODEX_DIRS: "/codex/.codex"');
+    expect(yml).toContain(`source: "/real${host}/thread-writer-locks"\n        target: "/codex/.codex/thread-writer-locks"\n        read_only: true`);
+    expect(yml.match(/read_only: true/g)).toHaveLength(4);
+    for (const secret of ['auth.json', 'config.toml', 'history.jsonl', 'shell_snapshots', 'sqlite', 'logs_']) expect(yml).not.toContain(secret);
+    const accounts = JSON.parse(JSON.parse(/HABBLAUD_ACCOUNTS: (".*")/.exec(yml)![1]) as string) as Array<Record<string, unknown>>;
+    expect(accounts.map((a) => [a.id, a.provider, a.configDir])).toEqual([
+      ['.claude', undefined, '/Users/fulano/.claude'],
+      ['.codex', 'codex', host],
+    ]);
+    // Sem Codex: nada de HABBLAUD_CODEX_DIRS.
+    expect(renderOverride(claude)).not.toContain('HABBLAUD_CODEX_DIRS');
+    expect(codexDisabled({ HABBLAUD_CODEX: '0' })).toBe(true);
+    expect(codexDisabled({ HABBLAUD_CODEX: 'off' })).toBe(true);
+    expect(codexDisabled({ HABBLAUD_CODEX: '1' })).toBe(false);
+    expect(codexDisabled({})).toBe(false);
+  });
+
   it('fuso do host vai para o container como TZ', () => {
-    const mounts = planMounts(['/Users/fulano/.claude'], [acc('.claude')], (p) => p);
+    const mounts = planMounts(['/Users/fulano/.claude'], [acc('.claude')], slash);
     expect(renderOverride(mounts, new Date(0), undefined, 'America/Sao_Paulo')).toContain('TZ: "America/Sao_Paulo"');
     expect(renderOverride(mounts)).not.toContain('TZ:');
     expect(hostTimeZone({ TZ: 'America/Sao_Paulo' })).toBe('America/Sao_Paulo');

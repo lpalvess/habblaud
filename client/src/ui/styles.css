@@ -339,6 +339,84 @@
     inset 0 2px 0 rgba(255, 255, 255, 0.35);
 }
 
+/* Conta do Codex: chip "vazado" (fundo escuro, borda e letra na cor da conta) com cantos em degrau, como um pixel
+   arredondado. Lê-se de longe como "outra ferramenta" sem precisar de logotipo. */
+.ui-acc-chip[data-provider='codex'] {
+  --step: 2px;
+  border-radius: 0;
+  background: #161b26;
+  color: var(--acc);
+  box-shadow:
+    inset 0 0 0 var(--step) var(--acc),
+    inset 0 calc(var(--step) * -2) 0 rgba(0, 0, 0, 0.3);
+  clip-path: polygon(
+    var(--step) 0,
+    calc(100% - var(--step)) 0,
+    100% var(--step),
+    100% calc(100% - var(--step)),
+    calc(100% - var(--step)) 100%,
+    var(--step) 100%,
+    0 calc(100% - var(--step)),
+    0 var(--step)
+  );
+}
+
+.ui-acc-chip--lg[data-provider='codex'] {
+  --step: 3px;
+}
+
+/* Conta do OpenCode: o mesmo chip "vazado" do Codex (outra ferramenta, sem logotipo). */
+.ui-acc-chip[data-provider='opencode'] {
+  --step: 2px;
+  border-radius: 0;
+  background: #161b26;
+  color: var(--acc);
+  box-shadow:
+    inset 0 0 0 var(--step) var(--acc),
+    inset 0 calc(var(--step) * -2) 0 rgba(0, 0, 0, 0.3);
+  clip-path: polygon(
+    var(--step) 0,
+    calc(100% - var(--step)) 0,
+    100% var(--step),
+    100% calc(100% - var(--step)),
+    calc(100% - var(--step)) 100%,
+    var(--step) 100%,
+    0 calc(100% - var(--step)),
+    0 var(--step)
+  );
+}
+
+.ui-acc-chip--lg[data-provider='opencode'] {
+  --step: 3px;
+}
+
+/* Selo de texto "Codex" ao lado do nome da conta (fonte do sistema: na Pixelify o "C" parece "O"). */
+.ui-prov {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 15px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px var(--ui-line-strong);
+  color: #d9def0;
+  font: 700 9.5px/1 var(--font-ui);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ui-prov[hidden] {
+  display: none;
+}
+
+.ui-prov--xs {
+  height: 13px;
+  padding: 0 4px;
+  font-size: 8.5px;
+}
+
 .ui-status-dot {
   --st: var(--st-idle);
   display: inline-block;
@@ -970,6 +1048,12 @@
   color: #ffcf8a;
 }
 
+/* Codex com números recentes: a idade fica à mostra, discreta (os números só se renovam com sessão rodando). */
+.ui-usage-card__state.is-fresh {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ui-muted);
+}
+
 .ui-usage-card__state-icon {
   display: inline-grid;
   align-self: center;
@@ -1108,6 +1192,23 @@
   }
 }
 
+/* Cartão minúsculo (4 ou mais contas em telas médias): sem a coluna do reinício (fica na dica). */
+@container usage-card (max-width: 123px) {
+  .ui-usage-card__meters {
+    grid-template-columns: 24px minmax(8px, 1fr) 30px;
+    column-gap: 4px;
+  }
+
+  .ui-meter__reset {
+    display: none;
+  }
+
+  /* A idade vira só o relógio (o texto continua na dica). */
+  .ui-usage-card__state > span:last-child {
+    display: none;
+  }
+}
+
 .ui-usage-card__msg {
   display: flex;
   align-items: center;
@@ -1127,6 +1228,12 @@
 
 .ui-usage-card__msg-short {
   display: none;
+}
+
+/* Codex sem cota nem créditos: aviso (nunca uma barra em 0%). */
+.ui-usage-card__msg.is-noquota {
+  color: #ffb0a0;
+  font-weight: 650;
 }
 
 .ui-usage-card__how {
@@ -2105,6 +2212,59 @@
   font-size: 12.5px;
 }
 
+/* Perguntas do AskUserQuestion dentro do alerta: só leitura, a resposta é dada no Claude Code. */
+.ui-ask {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.ui-ask__q {
+  padding-top: 9px;
+  border-top: 1px solid rgba(255, 181, 71, 0.25);
+}
+
+.ui-ask__tag {
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(255, 181, 71, 0.18);
+  font: 500 11px/1.4 var(--font-px);
+  color: var(--st-waiting);
+}
+
+.ui-ask__question {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff3df;
+}
+
+.ui-ask__hint {
+  margin-top: 2px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.ui-ask__opts {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.ui-ask__opts strong {
+  display: block;
+  font-weight: 600;
+}
+
+.ui-ask__desc {
+  display: block;
+  opacity: 0.8;
+  font-size: 11.5px;
+}
+
 @keyframes ui-alert-in {
   from {
     opacity: 0;
@@ -2342,6 +2502,22 @@
     0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
+/* Nome da sala com o lápis de renomear ao lado. */
+.ui-room-hero__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ui-room-hero__title > .ui-hero__name {
+  min-width: 0;
+}
+
+.ui-room-hero__rename {
+  flex: none;
+}
+
 .ui-room-hero__path {
   font: 11.5px var(--font-mono);
   color: var(--ui-muted);
@@ -2390,6 +2566,12 @@
   transition:
     opacity 0.15s,
     visibility 0s linear 0.15s;
+}
+
+/* Durante o replay os avisos ficam acima da barra de reprodução (a altura dela vem de ui/timelapse.ts), em vez de
+   cobrir a linha do tempo e os botões. */
+.ui-root.is-replay .ui-toasts {
+  bottom: calc(var(--free-bottom) + var(--lapse-h, 0px) + 10px);
 }
 
 .ui-toast {
@@ -3283,6 +3465,26 @@
   font-weight: 600;
 }
 
+.ui-tip__task {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--ui-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ui-tip__since {
+  margin-left: auto;
+  padding-left: 8px;
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--ui-muted);
+  white-space: nowrap;
+}
+
 .ui-tip .ui-status-dot {
   width: 7px;
   height: 7px;
@@ -3728,9 +3930,57 @@
   }
 }
 
+/* 4 ou mais contas (ex.: as do Claude Code, a do Codex e as do demo): os cartões podem estreitar até perder a coluna
+   do reinício (ela continua na dica de cada cartão) e o zoom fica na rolagem do mouse e nos atalhos + / −. */
+@media (max-width: 1700px) {
+  .ui-topbar:has(.ui-usage-card:nth-child(4)) .ui-usage-card {
+    min-width: 128px;
+  }
+
+  .ui-topbar:has(.ui-usage-card:nth-child(4)) .ui-topbar__right .ui-btn-group:first-child .ui-icon-btn:not(:first-child) {
+    display: none;
+  }
+}
+
 @media (max-width: 1140px) {
   .ui-topbar:has(.ui-usage-card:nth-child(3)) .ui-brand__name {
     display: none;
+  }
+}
+
+/* Os cartões de uso não cabem na linha da barra (muitas contas ou janela estreita; ui/usage.ts decide): vão para uma
+   segunda linha, como já acontece no celular, e rolam na horizontal se ainda assim não couberem. */
+@media (min-width: 601px) {
+  .ui-root.has-usage-row {
+    --top-h: 124px;
+  }
+
+  .ui-root.has-usage-row .ui-topbar {
+    flex-wrap: wrap;
+    align-content: center;
+    row-gap: 6px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  .ui-root.has-usage-row .ui-topbar__right {
+    margin-left: auto;
+  }
+
+  .ui-root.has-usage-row .ui-usage {
+    order: 10;
+    flex: 1 0 100%;
+    margin-left: 0;
+    padding: 3px 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  /* Sem ficar presa à rolagem da fila: a dica se ancora na barra (o backdrop-filter dela é o bloco de contenção). */
+  .ui-root.has-usage-row .ui-usage-tip {
+    position: fixed;
+    top: calc(var(--top-h) + 6px);
+    right: var(--gap);
   }
 }
 
@@ -3869,6 +4119,11 @@
     padding: 6px 8px;
   }
 
+  /* O feed tem a barra "Atividade" embaixo: o botão dele sai e deixa lugar para os do celular (Entregas, Novo agente). */
+  .ui-btn-feed {
+    display: none;
+  }
+
   .ui-brand__name {
     font-size: 18px;
   }
@@ -3913,6 +4168,9 @@
     order: 10;
     flex: 1 0 100%;
     margin-left: 0;
+    /* Com 4 ou mais contas os cartões mantêm o mínimo de 128 px e não cabem: a fila rola (a dica já é fixa aqui). */
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
   .ui-usage-card {
@@ -3989,6 +4247,40 @@
     left: var(--gap) !important;
     right: var(--gap) !important;
     width: auto;
+  }
+}
+
+/* Celular com Entregas e Novo agente: um ícone a mais que no computador não cabe numa linha; o timelapse sai (tecla L). */
+@media (max-width: 480px) {
+  .ui-topbar:has(.ui-btn-deliv:not([hidden])):has(.ui-btn-spawn:not([hidden])) .ui-btn-timelapse {
+    display: none;
+  }
+}
+
+/* Celulares (até 480 px): marca + 7 botões ocupam a primeira linha inteira, então os contadores descem para a linha dos
+   cartões. Sem isso, com dois contadores acesos, os botões da direita pulam para uma linha própria e a barra passa da
+   altura fixa. */
+@media (max-width: 480px) {
+  .ui-counters {
+    order: 9;
+    margin-left: 0;
+  }
+
+  .ui-counters:has(.ui-counter--waiting:not(:disabled)) ~ .ui-topbar__right {
+    margin-left: auto;
+  }
+
+  .ui-usage {
+    order: 10;
+    flex: 1 1 60%;
+  }
+}
+
+/* Celulares de 320 px: com os botões de 32 px a primeira linha (marca + 7 botões) não cabe. */
+@media (max-width: 340px) {
+  .ui-topbar__right .ui-icon-btn {
+    width: 28px;
+    height: 28px;
   }
 }
 
@@ -4191,7 +4483,7 @@
   color: #ffe6a3;
 }
 
-/* ---------------------------------------------------------------- terminal somente leitura */
+/* ---------------------------------------------------------------- terminal */
 
 /* Botão na gaveta do agente: uma "linha de terminal" com o prompt em pixels. */
 .ui-term-cta {
@@ -4218,14 +4510,15 @@
   letter-spacing: 0.02em;
 }
 
-.ui-term-cta__ro {
-  margin-left: auto;
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--ui-faint);
+.ui-term-cta__why {
+  margin: -4px 0 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ui-danger, #ff8a8a);
 }
 
 .ui-term-cta .ui-kbd {
+  margin-left: auto;
   min-width: 18px;
   height: 18px;
   font-size: 10.5px;
@@ -4378,32 +4671,6 @@
   border-radius: 1px;
   background: var(--st-waiting);
   animation: ui-blink 1s steps(2, jump-none) infinite;
-}
-
-.ui-term__ro {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-  height: 22px;
-  padding: 0 8px;
-  border-radius: 5px;
-  background: rgba(255, 181, 71, 0.1);
-  border: 1px solid rgba(255, 181, 71, 0.3);
-  font: 500 12px/1 var(--font-px);
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  color: #ffd9a3;
-  cursor: default;
-}
-
-.ui-term__ro-icon {
-  display: grid;
-}
-
-.ui-term__ro-icon .ui-px-icon {
-  width: 8px;
-  height: 9px;
 }
 
 .ui-term__close {
@@ -4756,7 +5023,7 @@ button.ui-term__think:hover,
   }
 }
 
-/* Rodapé: linha de estado do Claude Code e a caixa de entrada (desabilitada). */
+/* Rodapé: linha de estado do Claude Code e a caixa de mensagem (ui/composer.ts; desabilitada quando não dá). */
 .ui-term__foot {
   flex: none;
   padding: 8px 12px 12px;
@@ -4817,14 +5084,27 @@ button.ui-term__think:hover,
 
 .ui-term__prompt {
   display: grid;
-  grid-template-columns: 2ch minmax(0, 1fr);
+  grid-template-columns: 2ch minmax(0, 1fr) auto;
   column-gap: 1ch;
-  align-items: center;
-  height: 34px;
-  padding: 0 10px;
+  align-items: start;
+  min-height: 34px;
+  padding: 7px 6px 7px 10px;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--ui-line-strong);
+  cursor: text;
+  transition: border-color 0.15s;
+}
+
+.ui-term__prompt--mic {
+  grid-template-columns: 2ch minmax(0, 1fr) auto auto;
+}
+
+.ui-term__prompt:focus-within {
+  border-color: rgba(124, 200, 255, 0.55);
+}
+
+.ui-term__prompt.is-disabled {
   cursor: not-allowed;
 }
 
@@ -4832,23 +5112,172 @@ button.ui-term__think:hover,
   color: var(--term-dim);
 }
 
+.ui-term__prompt:focus-within .ui-term__caret {
+  color: var(--ui-accent);
+}
+
 .ui-term__input {
+  display: block;
   width: 100%;
   min-width: 0;
+  /* ~6 linhas; depois rola (a altura acompanha o texto: ui/composer.ts). */
+  max-height: calc(1.5em * 6);
   margin: 0;
   padding: 0;
   border: 0;
   outline: none;
   background: none;
+  resize: none;
+  overflow-y: auto;
   font: inherit;
-  color: var(--ui-muted);
+  color: var(--ui-text);
+}
+
+.ui-term__input:disabled {
+  overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
+  color: var(--ui-muted);
   cursor: not-allowed;
 }
 
 .ui-term__input::placeholder {
   color: var(--ui-faint);
   opacity: 1;
+}
+
+/* Caixa de mensagem (ui/composer.ts): na gaveta do agente e no rodapé do terminal (lá, a linha é o prompt acima). */
+.ui-msg--drawer .ui-msg__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.ui-msg--drawer .ui-msg__input {
+  flex: 1;
+  min-width: 0;
+  min-height: 32px;
+  max-height: calc(12.5px * 1.4 * 6 + 16px);
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--ui-line-strong);
+  background: rgba(0, 0, 0, 0.32);
+  color: var(--ui-text);
+  font: 12.5px/1.4 var(--font-ui);
+  resize: none;
+  overflow-y: auto;
+}
+
+.ui-msg--drawer .ui-msg__input:focus {
+  outline: none;
+  border-color: rgba(124, 200, 255, 0.6);
+}
+
+.ui-msg--drawer .ui-msg__input::placeholder {
+  color: var(--ui-faint);
+}
+
+.ui-msg--drawer .ui-msg__send {
+  flex: none;
+  height: 32px;
+  background: var(--ui-accent-soft);
+  border-color: rgba(124, 200, 255, 0.5);
+  color: #cfe9ff;
+  font-weight: 600;
+}
+
+.ui-msg--drawer .ui-msg__send:hover:not(:disabled) {
+  background: rgba(124, 200, 255, 0.22);
+}
+
+.ui-msg__send:disabled {
+  opacity: 0.45;
+}
+
+/* Microfone da caixa de mensagem: só o ícone; gravando, mostra o tempo. */
+.ui-dictate--compact {
+  flex: none;
+  gap: 4px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 7px;
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+.ui-dictate--compact .ui-dictate__label:empty {
+  display: none;
+}
+
+.ui-msg--terminal .ui-dictate--compact {
+  align-self: end;
+  min-width: 26px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid var(--ui-line-strong);
+  background: none;
+  color: var(--ui-muted);
+  font: 11px/1 var(--font-mono);
+}
+
+.ui-msg--terminal .ui-dictate--compact .ui-px-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.ui-msg__dictation.is-error {
+  color: var(--ui-danger, #ff8a8a);
+}
+
+/* No terminal: o botão fica na ponta da linha do prompt, discreto como o resto. */
+.ui-msg--terminal .ui-msg__send {
+  align-self: end;
+  min-width: 26px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid var(--ui-line-strong);
+  font: 12px/1 var(--font-mono);
+  color: var(--ui-muted);
+}
+
+.ui-msg--terminal .ui-msg__send:hover:not(:disabled) {
+  color: var(--ui-text);
+  border-color: rgba(124, 200, 255, 0.55);
+}
+
+.ui-msg__hint,
+.ui-msg__tip {
+  font-size: 11.5px;
+  color: var(--ui-faint);
+}
+
+.ui-msg__hint {
+  font-family: var(--font-mono);
+}
+
+.ui-msg__tip {
+  margin-top: 6px;
+}
+
+.ui-msg__status {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ui-muted);
+}
+
+.ui-msg--terminal .ui-msg__status {
+  padding: 0 4px;
+  font: 11.5px/1.4 var(--font-mono);
+}
+
+.ui-msg__status.is-ok {
+  color: #b9f2d2;
+}
+
+.ui-msg__status.is-error {
+  color: #ffb3aa;
 }
 
 /* Markdown das respostas (ui/markdown.ts). */
@@ -4999,14 +5428,8 @@ button.ui-term__think:hover,
   }
 
   .ui-term__kind,
-  .ui-term__room,
-  .ui-term-cta__ro {
+  .ui-term__room {
     display: none;
-  }
-
-  .ui-term__ro {
-    padding: 0 6px;
-    font-size: 11px;
   }
 
   .ui-term__scroll {
@@ -5802,7 +6225,7 @@ html.is-replay #world {
 /* ------------------------------------------------------------------------------------------------
    Responder pelo escritório: cartão "Pede permissão" na gaveta do agente (ui/permission.ts), o atalho
    "Responder" nos avisos e o destaque do contador "precisam de você". A prévia (comando/diff) reaproveita
-   as classes do terminal somente leitura (ui-term__in, ui-term__dl...).
+   as classes do terminal (ui-term__in, ui-term__dl...).
    ------------------------------------------------------------------------------------------------ */
 
 .ui-perm {
@@ -5999,6 +6422,151 @@ html.is-replay #world {
 
 .ui-perm__status.is-error {
   color: #ffb3aa;
+}
+
+/* Perguntas do AskUserQuestion no cartão: rádios (escolha única) ou caixas (várias), com a descrição, e o
+   "Outro" com o campo de texto. Cabeçalho, pergunta, dica e descrição reaproveitam as classes ui-ask__* do
+   alerta "Precisa de você". */
+.ui-perm-ask {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.ui-perm-ask__q {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.ui-perm-ask__q + .ui-perm-ask__q {
+  padding-top: 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 181, 71, 0.25);
+}
+
+/* Legenda flutuando: fica no fluxo normal (sem o recorte que o fieldset faz na borda). */
+.ui-perm-ask__legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+}
+
+.ui-perm-ask__legend .ui-ask__question {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.ui-perm-ask__q > .ui-ask__hint {
+  clear: both;
+}
+
+.ui-perm-ask__opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 181, 71, 0.22);
+  background: rgba(0, 0, 0, 0.18);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ui-perm-ask__opt:hover {
+  border-color: rgba(255, 181, 71, 0.5);
+}
+
+.ui-perm-ask__opt:has(.ui-perm-ask__input:checked) {
+  border-color: rgba(255, 181, 71, 0.75);
+  background: rgba(255, 181, 71, 0.13);
+}
+
+.ui-perm-ask__opt:has(.ui-perm-ask__input:disabled) {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ui-perm-ask__input {
+  flex: none;
+  margin: 2px 0 0;
+  accent-color: var(--st-waiting);
+}
+
+.ui-perm-ask__opt-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ui-perm-ask__opt-text strong {
+  font-weight: 600;
+  color: #fff3df;
+}
+
+.ui-perm-ask__other {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.ui-perm-ask__other .ui-perm-ask__opt {
+  flex: none;
+  align-items: center;
+  margin-top: 0;
+}
+
+.ui-perm-ask__other .ui-perm-ask__input {
+  margin-top: 0;
+}
+
+.ui-perm-ask__text {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--ui-line-strong);
+  background: rgba(0, 0, 0, 0.32);
+  color: var(--ui-text);
+  font: 12.5px/1.4 var(--font-ui);
+}
+
+.ui-perm-ask__text:focus {
+  outline: none;
+  border-color: rgba(255, 181, 71, 0.7);
+}
+
+.ui-perm-ask__text:disabled {
+  opacity: 0.5;
+}
+
+/* Sem pedido no escritório, a lista do alerta é só leitura: a dica de como responder por aqui. */
+.ui-ask__answer-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+/* Dica dos hooks do Codex no fim da gaveta de um agente do Codex. */
+.ui-codex-hint {
+  margin: 4px 0 2px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--ui-bg-soft);
+  border: 1px dashed var(--ui-line-strong);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ui-muted);
+}
+
+.ui-codex-hint[hidden] {
+  display: none;
+}
+
+.ui-codex-hint .ui-usage-setup__inline {
+  white-space: normal;
 }
 
 /* "Responder" no aviso de quem tem pedido para responder pelo escritório. */
@@ -6881,8 +7449,9 @@ html.is-replay #world {
     min-width: 0;
   }
 
+  /* O seletor Demonstração | Dados reais fica com a largura do conteúdo (196 px); o seletor de dia, com o que sobra. */
   .ui-day__source {
-    flex: 1.5 1 0;
+    flex: 0 0 auto;
     min-width: 0;
   }
 
@@ -6926,5 +7495,1562 @@ html.is-replay #world {
 @media (min-width: 601px) and (max-width: 760px) {
   .ui-topbar__right .ui-btn-group:first-child {
     display: none;
+  }
+}
+
+/* Linha do tempo do agente: "Mostrar mais" / "Mostrar menos" (15 itens por vez). */
+.ui-timeline__more {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.ui-timeline__more:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+/* Título da sessão na lista de agentes (o mesmo do hover do personagem). */
+.ui-agent__task {
+  display: block;
+  margin-top: 1px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--ui-text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Há quanto tempo o agente está ocioso, na linha do nome (no lugar do "Principal"). */
+.ui-agent__since {
+  flex: none;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--ui-muted);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ janelas móveis (ui/movable.ts) */
+
+.ui-move-handle {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.is-dragging,
+.is-dragging .ui-move-handle {
+  cursor: grabbing;
+}
+
+.ui-term.is-floating,
+.ui-drawer.is-floating {
+  right: auto;
+  bottom: auto;
+  overflow: hidden;
+  transition: none;
+  animation: none;
+}
+
+.ui-drawer.is-floating {
+  z-index: 25;
+  transform: none;
+  box-shadow: 0 24px 60px rgba(5, 7, 12, 0.55);
+}
+
+.ui-drawer.is-floating:not(.is-open) {
+  visibility: hidden;
+}
+
+.is-dragging {
+  opacity: 0.94;
+}
+
+/* Terminal expandido na tela toda do Habblaud (botão ao lado do fechar). */
+.ui-term.is-max {
+  z-index: 46;
+  inset: calc(var(--top-h) + var(--gap)) var(--gap) var(--gap) !important;
+  width: auto !important;
+  height: auto !important;
+  resize: none;
+  transition: none;
+  animation: none;
+}
+
+.ui-term.is-max .ui-move-handle {
+  cursor: default;
+}
+
+/* Alças de redimensionar nas bordas e quinas das janelas móveis (ui/movable.ts). */
+.ui-resize {
+  position: absolute;
+  z-index: 5;
+  touch-action: none;
+}
+
+.ui-resize--n,
+.ui-resize--s {
+  left: 10px;
+  right: 10px;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.ui-resize--n {
+  top: -2px;
+}
+
+.ui-resize--s {
+  bottom: -2px;
+}
+
+.ui-resize--e,
+.ui-resize--w {
+  top: 10px;
+  bottom: 10px;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.ui-resize--e {
+  right: -2px;
+}
+
+.ui-resize--w {
+  left: -2px;
+}
+
+.ui-resize--ne,
+.ui-resize--nw,
+.ui-resize--se,
+.ui-resize--sw {
+  width: 14px;
+  height: 14px;
+}
+
+.ui-resize--ne {
+  top: -2px;
+  right: -2px;
+  cursor: nesw-resize;
+}
+
+.ui-resize--sw {
+  bottom: -2px;
+  left: -2px;
+  cursor: nesw-resize;
+}
+
+.ui-resize--nw {
+  top: -2px;
+  left: -2px;
+  cursor: nwse-resize;
+}
+
+.ui-resize--se {
+  bottom: -2px;
+  right: -2px;
+  cursor: nwse-resize;
+}
+
+/* Expandida, em tela estreita ou fechada: sem alças. */
+.is-max > .ui-resize,
+.is-narrow .ui-resize {
+  display: none;
+}
+
+.is-resizing,
+.is-resizing * {
+  user-select: none;
+}
+
+.ui-node__head {
+  position: relative;
+}
+
+/* Arrastar agentes na lista lateral para reordenar (mesma ordem das abas do terminal). */
+.ui-node__head.is-dragging {
+  opacity: 0.45;
+}
+
+.ui-node__head.is-drop-before::before,
+.ui-node__head.is-drop-after::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--ui-accent);
+  z-index: 1;
+}
+
+.ui-node__head.is-drop-before::before {
+  top: -1px;
+}
+
+.ui-node__head.is-drop-after::after {
+  bottom: -1px;
+}
+
+/* Arrastar salas na lista lateral para reordenar (ui/roomorder.ts). */
+.ui-room__head.is-dragging {
+  opacity: 0.45;
+}
+
+.ui-room__head.is-drop-before::before,
+.ui-room__head.is-drop-after::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--ui-accent);
+  z-index: 1;
+}
+
+.ui-room__head.is-drop-before::before {
+  top: -2px;
+}
+
+.ui-room__head.is-drop-after::after {
+  bottom: -2px;
+}
+
+/* Renomear sala: campo flutuante do botão direito (ui/roomrename.ts). */
+.ui-rename {
+  position: fixed;
+  z-index: 60;
+  width: 260px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--ui-bg-solid);
+  border: 1px solid var(--ui-line-strong);
+  box-shadow: 0 14px 40px rgba(5, 7, 12, 0.5);
+  color: var(--ui-text);
+  font: 13px/1.4 var(--font-ui);
+}
+
+.ui-rename__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--ui-muted);
+}
+
+.ui-rename__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--ui-line-strong);
+  background: var(--ui-bg-soft);
+  color: var(--ui-text);
+  font: inherit;
+}
+
+.ui-spawn__label {
+  display: block;
+  margin: 8px 0 4px;
+  font: 500 12.5px/1.2 var(--font-px);
+  color: var(--ui-muted);
+}
+
+.ui-spawn__prompt {
+  resize: vertical;
+  min-height: 84px;
+}
+
+.ui-spawn__go {
+  margin-top: 10px;
+  width: 100%;
+  justify-content: center;
+}
+
+.ui-spawn__folders {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 232px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ui-spawn__folder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'name when' 'path when';
+  align-items: center;
+  column-gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--ui-line);
+  background: var(--ui-bg-soft);
+  color: var(--ui-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.ui-spawn__folder:hover {
+  border-color: var(--ui-line-strong);
+}
+
+.ui-spawn__folder.is-on {
+  border-color: var(--ui-accent);
+  background: color-mix(in srgb, var(--ui-accent) 14%, transparent);
+}
+
+.ui-spawn__folder:focus-visible,
+.ui-spawn__other:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 1px;
+}
+
+.ui-spawn__folder-name {
+  grid-area: name;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-spawn__folder-path {
+  grid-area: path;
+  font-size: 11.5px;
+  color: var(--ui-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-spawn__folder-when {
+  grid-area: when;
+  font-size: 11px;
+  color: var(--ui-faint);
+}
+
+.ui-spawn__other {
+  margin: 6px 0 0;
+  padding: 6px 2px;
+  border: 0;
+  background: none;
+  color: var(--ui-accent);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ui-spawn__other.is-on {
+  color: var(--ui-muted);
+}
+
+.ui-spawn__path {
+  margin-top: 4px;
+}
+
+.ui-spawn__tools {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ui-spawn__tools .ui-btn {
+  flex: 1 1 0;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  touch-action: manipulation;
+}
+
+.ui-dictate.is-recording {
+  border-color: var(--ui-danger, #ff8a8a);
+  color: var(--ui-danger, #ff8a8a);
+  animation: ui-dictate-pulse 1.2s ease-in-out infinite;
+}
+
+.ui-dictate.is-working {
+  opacity: 0.75;
+}
+
+@keyframes ui-dictate-pulse {
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--ui-danger, #ff8a8a) 25%, transparent);
+  }
+}
+
+.ui-spawn__files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ui-spawn__files:empty {
+  display: none;
+}
+
+.ui-spawn__file {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 4px;
+  border-radius: 8px;
+  border: 1px solid var(--ui-line);
+  background: var(--ui-bg-soft);
+}
+
+.ui-spawn__thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.ui-spawn__thumb--doc {
+  display: grid;
+  place-items: center;
+  font: 600 9px/1 var(--font-px);
+  color: var(--ui-muted);
+  border: 1px solid var(--ui-line-strong);
+}
+
+.ui-spawn__file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+}
+
+.ui-spawn__file-size {
+  font-size: 11px;
+  color: var(--ui-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-dictate.is-recording {
+    animation: none;
+  }
+}
+
+/* Celular: o Safari do iPhone dá zoom ao focar um campo com letra menor que 16 px; com 16 px ele não dá (e o
+   pinça para ampliar continua funcionando). Vale para todos os campos do app. */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+  html {
+    touch-action: manipulation;
+  }
+}
+
+.ui-spawn__status:empty {
+  display: none;
+}
+
+.ui-spawn__status.is-error,
+.ui-rename__hint.is-error {
+  color: var(--ui-danger, #ff8a8a);
+}
+
+.ui-rename__input:focus {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -1px;
+}
+
+.ui-rename__hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--ui-faint);
+}
+
+.ui-rename__hint.is-error {
+  color: #ff9a8a;
+}
+
+/* Editor do personagem (gaveta do agente): lápis ao lado do nome e painel com prévia, nome e peças. */
+.ui-char-edit {
+  align-self: center;
+}
+
+.ui-char {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 9px;
+  background: var(--ui-bg-soft);
+  border: 1px solid var(--ui-line-strong);
+  box-shadow: inset 3px 0 0 var(--ui-accent);
+  animation: ui-alert-in 0.4s var(--ease);
+}
+
+.ui-char__top {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: end;
+  gap: 12px;
+}
+
+.ui-char__preview {
+  image-rendering: pixelated;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ui-char__head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.ui-char__label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  font-size: 12px;
+  color: var(--ui-muted);
+}
+
+.ui-char__name {
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--ui-line-strong);
+  background: rgba(0, 0, 0, 0.25);
+  font: 600 14px/1 var(--font-ui);
+  color: var(--ui-text);
+}
+
+.ui-root .ui-char__name:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 1px;
+}
+
+.ui-char__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.ui-char__group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.ui-char__group legend {
+  margin-bottom: 4px;
+  padding: 0;
+  font: 600 12px/1.2 var(--font-ui);
+  color: var(--ui-text);
+}
+
+.ui-char__row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+}
+
+.ui-char__row-label {
+  padding-top: 4px;
+  font-size: 11px;
+  color: var(--ui-faint);
+}
+
+.ui-char__opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ui-char__chip {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--ui-line-strong);
+  background: var(--ui-bg-soft);
+  font-size: 12px;
+  color: var(--ui-text);
+}
+
+.ui-char__chip:hover {
+  background: var(--ui-bg-hover);
+}
+
+.ui-char__chip[aria-checked='true'] {
+  border-color: rgba(124, 200, 255, 0.6);
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+}
+
+.ui-char__swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.ui-char__swatch[aria-checked='true'] {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 1px;
+}
+
+.ui-char__chip[aria-disabled='true'],
+.ui-char__swatch[aria-disabled='true'] {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ui-root .ui-char__chip:focus-visible,
+.ui-root .ui-char__swatch:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+.ui-char__error {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--lv-crit);
+}
+
+.ui-char__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ui-char__reset {
+  margin-left: auto;
+}
+
+/* ------------------------------------------------------------------ terminal interativo (ui/pty.ts) */
+
+.ui-actions {
+  display: grid;
+  gap: 6px;
+}
+
+.ui-actions__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ui-actions__msg {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-muted);
+}
+
+.ui-actions__msg.is-error {
+  color: #ff8a80;
+}
+
+.ui-btn--accent {
+  border-color: color-mix(in srgb, var(--st-working) 60%, transparent);
+  color: color-mix(in srgb, var(--st-working) 70%, #fff);
+}
+
+.ui-btn--danger {
+  border-color: rgba(255, 107, 107, 0.45);
+  color: #ff9b9b;
+}
+
+.ui-btn--danger:hover {
+  background: rgba(255, 107, 107, 0.14);
+}
+
+.ui-btn.is-confirm {
+  background: rgba(255, 181, 71, 0.18);
+  border-color: var(--st-waiting);
+  color: #ffd79a;
+}
+
+.ui-pty {
+  z-index: 31;
+}
+
+.ui-pty__live {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--st-working) 75%, #fff);
+  background: color-mix(in srgb, var(--st-working) 16%, transparent);
+}
+
+.ui-pty__state {
+  flex: none;
+  font-size: 12px;
+  color: var(--ui-muted);
+}
+
+.ui-pty__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: 6px 4px 4px 10px;
+  background: #0a0c12;
+}
+
+.ui-pty__screen {
+  width: 100%;
+  height: 100%;
+}
+
+/* Atalho para o terminal do agente na lista lateral: no lugar do status, só com o mouse em cima (ou aberto). */
+.ui-node__head {
+  position: relative;
+}
+
+.ui-node__term {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--ui-bg-solid);
+  color: var(--ui-muted);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-50%) scale(0.9);
+  transition:
+    opacity 0.12s,
+    transform 0.12s,
+    background-color 0.12s;
+}
+
+.ui-node__term svg {
+  width: 15px;
+  height: 15px;
+}
+
+.ui-node__head:hover .ui-node__term,
+.ui-node__term:focus-visible,
+.ui-node__term.is-on {
+  opacity: 1;
+  transform: translateY(-50%);
+}
+
+.ui-node__term:hover {
+  color: #fff;
+  background: color-mix(in srgb, var(--ui-accent) 24%, var(--ui-bg-solid));
+}
+
+.ui-node__term.is-live {
+  color: color-mix(in srgb, var(--st-working) 80%, #fff);
+}
+
+.ui-node__term.is-on {
+  color: #fff;
+  background: color-mix(in srgb, var(--ui-accent) 32%, var(--ui-bg-solid));
+  box-shadow: inset 0 0 0 1px var(--ui-accent);
+}
+
+/* O botão fica por cima do status: esconde o quadradinho enquanto ele aparece. */
+.ui-node__head:hover > .ui-agent > .ui-status-dot,
+.ui-node__head:has(.ui-node__term:focus-visible) > .ui-agent > .ui-status-dot,
+.ui-node__head:has(.ui-node__term.is-on) > .ui-agent > .ui-status-dot {
+  visibility: hidden;
+}
+
+/* Abas da janela de terminal: os agentes do mesmo projeto. */
+.ui-ttabs {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 4px 8px 0;
+  overflow-x: auto;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--ui-line);
+  scrollbar-width: thin;
+}
+
+.ui-ttab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  max-width: 300px;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 7px 7px 0 0;
+  background: transparent;
+  color: var(--ui-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.ui-ttab:hover {
+  color: var(--ui-text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ui-ttab.is-on {
+  color: var(--ui-text);
+  background: #0a0c12;
+  border-color: var(--ui-line);
+}
+
+.ui-ttab .ui-status-dot {
+  width: 7px;
+  height: 7px;
+}
+
+.ui-ttab__name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ui-ttab__name {
+  flex: none;
+  max-width: 110px;
+}
+
+/* Começo do que o agente está fazendo, ao lado do nome. */
+.ui-ttab__doing {
+  min-width: 0;
+  max-width: 150px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11.5px;
+  color: var(--ui-faint);
+}
+
+.ui-ttab.is-on .ui-ttab__doing {
+  color: var(--ui-muted);
+}
+
+/* X da aba: encerra a sessão (segundo clique confirma). */
+.ui-ttab__close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  margin-right: -4px;
+  padding: 0 3px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--ui-faint);
+  opacity: 0;
+}
+
+.ui-ttab:hover .ui-ttab__close,
+.ui-ttab:focus-visible .ui-ttab__close,
+.ui-ttab.is-on .ui-ttab__close,
+.ui-ttab__close.is-confirm {
+  opacity: 1;
+}
+
+.ui-ttab__close:hover {
+  color: var(--ui-text);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.ui-ttab__close.is-confirm {
+  font-size: 11px;
+  color: #fff;
+  background: #c2413a;
+}
+
+.ui-ttab__live {
+  font: 600 11px/1 var(--font-mono, monospace);
+  color: color-mix(in srgb, var(--st-working) 75%, #fff);
+}
+
+/* Botões do topo da janela (Assumir daqui, Encerrar). */
+.ui-termact {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.ui-termact__msg {
+  max-width: 220px;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--ui-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ui-termact__msg.is-error {
+  color: #ff8a80;
+}
+
+/* Sessão aberta noutro terminal: aviso no lugar da tela. */
+.ui-pty__away {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  flex: 1;
+  padding: 24px;
+  text-align: center;
+  background: #0a0c12;
+}
+
+.ui-pty__away strong {
+  font: 500 16px/1.2 var(--font-px);
+}
+
+.ui-pty__away p {
+  max-width: 460px;
+  margin: 0;
+}
+
+.ui-pty__away-title {
+  font-size: 14px;
+  color: var(--ui-text);
+}
+
+.ui-pty.is-away .ui-pty__live {
+  display: none;
+}
+
+/* Arrastar abas do terminal para reordenar (ui/termtabs.ts). */
+.ui-ttab {
+  position: relative;
+}
+
+.ui-ttab.is-dragging {
+  opacity: 0.45;
+}
+
+.ui-ttab.is-drop-before::before,
+.ui-ttab.is-drop-after::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 2px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--ui-accent);
+}
+
+.ui-ttab.is-drop-before::before {
+  left: -2px;
+}
+
+.ui-ttab.is-drop-after::after {
+  right: -2px;
+}
+
+/* ------------------------------------------------------------------ entregas */
+
+.ui-btn-deliv {
+  position: relative;
+}
+
+.ui-deliv-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #ffb547;
+  color: #1b1405;
+  font: 700 10px/16px var(--font-ui);
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--ui-bg-solid);
+  animation: ui-deliv-pop 0.4s ease-out;
+}
+
+@keyframes ui-deliv-pop {
+  0% { transform: scale(0.4); }
+  70% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+@media (min-width: 721px) {
+  .ui-deliv {
+    width: 420px;
+  }
+}
+
+.ui-deliv-lead {
+  margin: 0 14px 10px;
+  font-size: 12px;
+  color: var(--ui-faint);
+}
+
+.ui-deliv-empty {
+  margin: 18px 14px;
+  color: var(--ui-muted);
+  font-size: 13px;
+}
+
+.ui-deliv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0 10px 10px;
+  list-style: none;
+}
+
+.ui-deliv-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--ui-line);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015));
+  color: var(--ui-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color 0.15s, transform 0.1s;
+}
+
+.ui-deliv-card:hover {
+  border-color: var(--ui-line-strong);
+}
+
+.ui-deliv-card:active {
+  transform: scale(0.99);
+}
+
+.ui-deliv-card:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 1px;
+}
+
+.ui-deliv-card.is-new {
+  border-color: rgba(255, 181, 71, 0.55);
+  box-shadow: inset 3px 0 0 #ffb547;
+}
+
+.ui-deliv-card__who {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ui-muted);
+}
+
+.ui-deliv-card__name {
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.ui-deliv-card__project {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-deliv-card__project::before {
+  content: '· ';
+}
+
+.ui-deliv-card__when {
+  margin-left: auto;
+  flex: none;
+  color: var(--ui-faint);
+}
+
+.ui-deliv-card__new {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(255, 181, 71, 0.18);
+  color: #ffcf85;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ui-deliv-card__headline {
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.ui-deliv-card__summary {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ui-muted);
+}
+
+.ui-deliv-card__thumbs {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.ui-deliv-card__meta {
+  font-size: 11px;
+  color: var(--ui-faint);
+}
+
+.ui-deliv-thumb {
+  flex: none;
+  width: 64px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--ui-line);
+}
+
+.ui-deliv-thumb--doc,
+.ui-deliv-thumb--more {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 2px;
+  font: 700 10px/1 var(--font-px);
+  color: var(--ui-muted);
+}
+
+.ui-deliv-thumb--pdf b { color: #ff8a8a; }
+.ui-deliv-thumb--video b { color: #b39dff; }
+.ui-deliv-thumb--page b { color: var(--ui-accent); }
+
+.ui-deliv-thumb--big {
+  width: 100%;
+  height: 130px;
+}
+
+.ui-deliv-thumb--big.ui-deliv-thumb--doc span {
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 11px/1.2 var(--font-ui);
+}
+
+.ui-deliv-initial {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 6px;
+  background: rgba(124, 200, 255, 0.16);
+  color: #cfe9ff;
+  font: 700 12px/1 var(--font-px);
+}
+
+.ui-deliv-initial--sm { width: 22px; height: 22px; }
+.ui-deliv-initial--md { width: 40px; height: 40px; font-size: 18px; }
+
+/* Modal da entrega: folha inteira no celular, cartão central no computador. */
+.ui-deliv-modal,
+.ui-deliv-viewer {
+  padding: 0;
+  border: 0;
+  color: var(--ui-text);
+}
+
+.ui-deliv-modal {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  border-radius: 16px;
+  background: var(--ui-bg-solid);
+  border: 1px solid var(--ui-line-strong);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+}
+
+.ui-deliv-modal::backdrop,
+.ui-deliv-viewer::backdrop {
+  background: rgba(5, 8, 14, 0.72);
+  backdrop-filter: blur(3px);
+}
+
+.ui-deliv-modal[open] {
+  animation: ui-deliv-in 0.22s ease-out;
+}
+
+@keyframes ui-deliv-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+
+.ui-deliv-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 16px calc(18px + env(safe-area-inset-bottom));
+}
+
+.ui-deliv-modal__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ui-deliv-modal__who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  font-size: 12px;
+  color: var(--ui-muted);
+}
+
+.ui-deliv-modal__who strong {
+  font-size: 14px;
+  color: var(--ui-text);
+}
+
+.ui-deliv-modal__headline {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.ui-deliv-modal__summary {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(124, 200, 255, 0.08);
+  border: 1px solid rgba(124, 200, 255, 0.25);
+}
+
+.ui-deliv-modal__summary p,
+.ui-deliv-modal__request p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ui-deliv-modal__label {
+  font: 600 11px/1 var(--font-px);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ui-faint);
+}
+
+.ui-deliv-modal__atts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.ui-deliv-att {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: zoom-in;
+  touch-action: manipulation;
+}
+
+.ui-deliv-att:focus-visible .ui-deliv-thumb {
+  outline: 2px solid var(--ui-accent);
+}
+
+.ui-deliv-att__caption {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--ui-muted);
+}
+
+.ui-deliv-modal__request p {
+  color: var(--ui-muted);
+  font-style: italic;
+}
+
+.ui-deliv-modal__full summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ui-accent);
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+.ui-deliv-md {
+  margin-top: 8px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.ui-deliv-md pre {
+  overflow-x: auto;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+}
+
+.ui-deliv-modal__actions {
+  display: flex;
+  gap: 8px;
+  position: sticky;
+  bottom: 0;
+  padding-top: 8px;
+  background: linear-gradient(transparent, var(--ui-bg-solid) 30%);
+}
+
+.ui-deliv-modal__actions .ui-btn {
+  flex: 1;
+  justify-content: center;
+  min-height: 44px;
+}
+
+/* Visualizador: tela cheia, fundo escuro. */
+.ui-deliv-viewer {
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  background: #05070b;
+}
+
+.ui-deliv-viewer[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.ui-deliv-viewer__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: calc(8px + env(safe-area-inset-top)) 10px 8px;
+  background: rgba(18, 21, 29, 0.92);
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.ui-deliv-viewer__label {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.ui-deliv-viewer__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ui-deliv-viewer__count {
+  font-size: 11px;
+  color: var(--ui-faint);
+}
+
+.ui-deliv-viewer__open {
+  min-height: 36px;
+  text-decoration: none;
+}
+
+.ui-deliv-viewer__body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+}
+
+.ui-deliv-viewer__img,
+.ui-deliv-viewer__video {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.ui-deliv-viewer__img {
+  cursor: zoom-in;
+}
+
+/* Toque na imagem: tamanho real, arrastar para ver o resto; outro toque volta a caber na tela. */
+.ui-deliv-viewer__body.is-zoomed {
+  display: block;
+  place-items: initial;
+}
+
+.ui-deliv-viewer__body.is-zoomed .ui-deliv-viewer__img {
+  max-width: none;
+  max-height: none;
+  cursor: zoom-out;
+}
+
+.ui-deliv-viewer__frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.ui-deliv-viewer__text {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  font: 12px/1.5 var(--font-mono);
+  white-space: pre-wrap;
+}
+
+.ui-deliv-viewer__file,
+.ui-deliv-viewer__err {
+  text-align: center;
+  color: var(--ui-muted);
+}
+
+/* Aviso de entrega nova: cartão no rodapé, toque abre. */
+.ui-deliv-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(420px, calc(100vw - 24px));
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 181, 71, 0.55);
+  background: rgba(24, 20, 12, 0.96);
+  color: var(--ui-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transform: translateX(-50%);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.ui-deliv-toast.is-in {
+  animation: ui-deliv-toast-in 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+@keyframes ui-deliv-toast-in {
+  from { opacity: 0; transform: translate(-50%, 24px) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.ui-deliv-toast__icon {
+  flex: none;
+  color: #ffb547;
+}
+
+.ui-deliv-toast__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.ui-deliv-toast__text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ui-muted);
+}
+
+@media (max-width: 640px) {
+  .ui-deliv-modal {
+    width: 100vw;
+    max-width: none;
+    max-height: 100dvh;
+    height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+    border: 0;
+  }
+  .ui-deliv-modal__body {
+    max-height: 100dvh;
+    padding-top: calc(14px + env(safe-area-inset-top));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-deliv-badge,
+  .ui-deliv-modal[open],
+  .ui-deliv-toast.is-in {
+    animation: none;
+  }
+}
+
+/* App na Tela de Início (viewport-fit=cover): o que encosta no rodapé sobe acima da barra de gestos do iPhone. */
+.ui-feed {
+  bottom: calc(var(--gap) + env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 600px) {
+  .ui-drawer {
+    bottom: calc(var(--gap) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Celular: atalhos de teclado não servem para nada; a caixa de mensagem fica sempre à mão no rodapé da gaveta. */
+@media (pointer: coarse) {
+  .ui-kbd {
+    display: none !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .ui-sec--msg {
+    position: sticky;
+    bottom: -20px;
+    z-index: 2;
+    margin: 0 -16px;
+    padding: 10px 16px 14px;
+    background: var(--ui-bg-solid);
+    border-top: 1px solid var(--ui-line);
+    box-shadow: 0 -12px 24px rgba(5, 7, 12, 0.35);
   }
 }

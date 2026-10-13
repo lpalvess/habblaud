@@ -1,28 +1,30 @@
-// Formatação em PT-BR (tempos, números, uso). Funções puras: sem DOM, testadas em ui/format.test.ts.
+// Formatação no idioma ativo (PT-BR por padrão) (tempos, números, uso). Funções puras: sem DOM, testadas em ui/format.test.ts.
+import { intlLocale, tr } from '../../../shared/i18n';
 
 const SECOND = 1_000;
 const MINUTE = 60 * SECOND;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-const LOCALE = 'pt-BR';
+const LOCALE = intlLocale();
 
 const numberFmt1 = new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 1 });
 const integerFmt = new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 0 });
 const usdFmt = new Intl.NumberFormat(LOCALE, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const clockFmt = new Intl.DateTimeFormat(LOCALE, { hour: '2-digit', minute: '2-digit' });
-const clockSecFmt = new Intl.DateTimeFormat(LOCALE, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+// Relógio de 24 h em todos os idiomas (no inglês o AM/PM não cabe na coluna do feed).
+const clockFmt = new Intl.DateTimeFormat(LOCALE, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const clockSecFmt = new Intl.DateTimeFormat(LOCALE, { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
 const weekdayFmt = new Intl.DateTimeFormat(LOCALE, { weekday: 'short' });
-const dateTimeFmt = new Intl.DateTimeFormat(LOCALE, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+const dateTimeFmt = new Intl.DateTimeFormat(LOCALE, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 
 /** Tempo relativo no passado: "agora", "há 5 s", "há 3 min", "há 2 h", "há 4 d". */
 export function relativeTime(at: number, now: number): string {
   const diff = now - at;
-  if (!Number.isFinite(diff) || diff < 5 * SECOND) return 'agora';
-  if (diff < MINUTE) return `há ${Math.floor(diff / SECOND)} s`;
-  if (diff < HOUR) return `há ${Math.floor(diff / MINUTE)} min`;
-  if (diff < DAY) return `há ${Math.floor(diff / HOUR)} h`;
-  return `há ${Math.floor(diff / DAY)} d`;
+  if (!Number.isFinite(diff) || diff < 5 * SECOND) return tr('agora');
+  if (diff < MINUTE) return tr('há {0} s', [Math.floor(diff / SECOND)]);
+  if (diff < HOUR) return tr('há {0} min', [Math.floor(diff / MINUTE)]);
+  if (diff < DAY) return tr('há {0} h', [Math.floor(diff / HOUR)]);
+  return tr('há {0} d', [Math.floor(diff / DAY)]);
 }
 
 /** Duração legível: "12 s", "3 min", "2 h 10 min", "3 d 4 h". */
@@ -57,8 +59,8 @@ export function formatElapsed(ms: number): string {
 /** Contagem regressiva: "em 2 h 10 min", "em 5 min", "em menos de 1 min", "agora". */
 export function formatCountdown(target: number, now: number): string {
   const diff = target - now;
-  if (diff <= 0) return 'agora';
-  if (diff < MINUTE) return 'em menos de 1 min';
+  if (diff <= 0) return tr('agora');
+  if (diff < MINUTE) return tr('em menos de 1 min');
   return `em ${formatDuration(diff)}`;
 }
 
@@ -81,8 +83,8 @@ export function formatResetAt(resetsAt: number, now: number): string {
   if (!Number.isFinite(resetsAt) || resetsAt <= now) return '';
   const time = clockFmt.format(resetsAt);
   const days = calendarDayDiff(resetsAt, now);
-  if (days <= 0) return `às ${time}`;
-  if (days === 1) return `amanhã às ${time}`;
+  if (days <= 0) return tr('às {0}', [time]);
+  if (days === 1) return tr('amanhã às {0}', [time]);
   return `${weekdayFmt.format(resetsAt)}, ${time}`;
 }
 
@@ -130,19 +132,19 @@ export function usageWindowView(win: { utilization: number; resetsAt?: number } 
     return {
       pct: null,
       renewed: true,
-      reset: 'renovada',
-      resetShort: 'renovada',
-      summary: 'renovada depois da última leitura (uso atual desconhecido)',
+      reset: tr('renovada'),
+      resetShort: tr('renovada'),
+      summary: tr('renovada depois da última leitura (uso atual desconhecido)'),
     };
   }
   const pct = clampPercent(win.utilization);
-  if (resetsAt === undefined) return { pct, renewed: false, reset: '', resetShort: '', summary: `${pct}% usado` };
+  if (resetsAt === undefined) return { pct, renewed: false, reset: '', resetShort: '', summary: tr('{0}% usado', [pct]) };
   const diff = resetsAt - now;
   let reset: string;
   if (diff < DAY) reset = formatCountdown(resetsAt, now);
   else {
     const time = clockFmt.format(resetsAt);
-    reset = calendarDayDiff(resetsAt, now) === 1 ? `amanhã, ${time}` : `${weekdayFmt.format(resetsAt)}, ${time}`;
+    reset = calendarDayDiff(resetsAt, now) === 1 ? tr('amanhã, {0}', [time]) : `${weekdayFmt.format(resetsAt)}, ${time}`;
   }
   const at = formatResetAt(resetsAt, now);
   return {
@@ -150,7 +152,7 @@ export function usageWindowView(win: { utilization: number; resetsAt?: number } 
     renewed: false,
     reset,
     resetShort: compactDuration(diff),
-    summary: `${pct}% usado · reinicia ${at} (${formatCountdown(resetsAt, now)})`,
+    summary: tr('{0}% usado · reinicia {1} ({2})', [pct, at, formatCountdown(resetsAt, now)]),
   };
 }
 
@@ -214,6 +216,15 @@ export function normalizeSearch(s: string): string {
 /** Nome curto do modelo: "claude-opus-5-5" -> "Opus 5.5". Mantém o original se não reconhecer. */
 export function prettyModel(model: string | undefined): string {
   if (!model) return '—';
+  // Codex: "gpt-5.3-codex" -> "GPT-5.3 Codex", "gpt-5.1-codex-mini" -> "GPT-5.1 Codex Mini", "gpt-5" -> "GPT-5".
+  const gpt = /^gpt-(\d+(?:\.\d+)?[a-z]?)((?:-[a-z][a-z0-9]*)*)$/i.exec(model);
+  if (gpt) {
+    const words = gpt[2]
+      .split('-')
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+    return [`GPT-${gpt[1]}`, ...words].join(' ');
+  }
   // Formatos: "claude-opus-5-5", "claude-sonnet-4-5-20250929", "claude-opus-4-20250514", "claude-3-5-sonnet-20241022".
   const m = /claude-(?:(\d{1,2}(?:-\d{1,2})?)-)?([a-z]+)(?:-(\d{1,2})(?!\d)(?:-(\d{1,2})(?!\d))?)?/i.exec(model);
   if (!m) return model;
@@ -223,12 +234,12 @@ export function prettyModel(model: string | undefined): string {
 }
 
 const PERMISSION_LABELS: Record<string, string> = {
-  default: 'Padrão (pergunta)',
-  acceptEdits: 'Aceita edições',
-  plan: 'Modo plano',
-  bypassPermissions: 'Sem confirmações',
-  dontAsk: 'Não pergunta',
-  auto: 'Automático',
+  default: tr('Padrão (pergunta)'),
+  acceptEdits: tr('Aceita edições'),
+  plan: tr('Modo plano'),
+  bypassPermissions: tr('Sem confirmações'),
+  dontAsk: tr('Não pergunta'),
+  auto: tr('Automático'),
 };
 
 export function permissionLabel(mode: string | undefined): string {

@@ -1,4 +1,5 @@
 // Configurações (popover): opções do escritório, avisos, modo demonstração e Sobre (versão).
+import { access, remoteLogout } from '../net/access';
 import type { UiComponent, UiContext } from './context';
 import { h, iconButton, setAttr, setHidden, setText } from './dom';
 import { ICONS } from './icons';
@@ -7,6 +8,30 @@ import type { UiPrefs } from './prefs';
 import { SoundSettingsGroup } from './settings-sound';
 import type { SoundControl } from './sound';
 import { AboutGroup } from './version';
+import { LOCALE_STORAGE_KEY, LOCALES, normalizeLocale, tr, type Locale } from '../../../shared/i18n';
+
+type LanguageChoice = 'auto' | Locale;
+
+/** Idioma escolhido nas Configurações ("auto" = o do navegador). */
+function savedLanguage(): LanguageChoice {
+  try {
+    return normalizeLocale(localStorage.getItem(LOCALE_STORAGE_KEY)) ?? 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
+/** Salva a escolha e recarrega: os textos são montados uma vez, ao carregar a página. */
+function pickLanguage(v: LanguageChoice): void {
+  if (v === savedLanguage()) return;
+  try {
+    if (v === 'auto') localStorage.removeItem(LOCALE_STORAGE_KEY);
+    else localStorage.setItem(LOCALE_STORAGE_KEY, v);
+  } catch {
+    return;
+  }
+  location.reload();
+}
 
 type BoolPref = { [K in keyof UiPrefs]: UiPrefs[K] extends boolean ? K : never }[keyof UiPrefs];
 
@@ -61,8 +86,13 @@ export class SettingsPopover implements UiComponent {
   private bubbles: ReturnType<typeof segmented<UiPrefs['bubbles']>>;
   private liveliness: ReturnType<typeof segmented<UiPrefs['liveliness']>>;
   private daylight: ReturnType<typeof segmented<UiPrefs['daylight']>>;
+  private theme: ReturnType<typeof segmented<UiPrefs['theme']>>;
+  private language: ReturnType<typeof segmented<LanguageChoice>>;
   private soundGroup: SoundSettingsGroup;
   private demoGroup: HTMLElement;
+  /** Só na página do celular (porta remota com login): sair deste aparelho. */
+  private remoteGroup: HTMLElement;
+  private logoutBtn: HTMLButtonElement;
   private about: AboutGroup;
   private demoBusy = false;
   private anchor: HTMLElement | null = null;
@@ -80,54 +110,89 @@ export class SettingsPopover implements UiComponent {
     const flip = (key: BoolPref) => () => ctx.updatePrefs({ [key]: !ctx.prefs[key] } as Partial<UiPrefs>);
 
     this.bubbles = segmented<UiPrefs['bubbles']>(
-      'Balões de atividade',
+      tr('Balões de atividade'),
       [
-        ['all', 'Todos'],
-        ['important', 'Importantes'],
-        ['none', 'Nenhum'],
+        ['all', tr('Todos')],
+        ['important', tr('Importantes')],
+        ['none', tr('Nenhum')],
       ],
       (v) => ctx.updatePrefs({ bubbles: v }),
     );
     this.liveliness = segmented<UiPrefs['liveliness']>(
-      'Movimento pelo escritório',
+      tr('Movimento pelo escritório'),
       [
-        ['calm', 'Calmo'],
-        ['normal', 'Normal'],
-        ['lively', 'Agitado'],
+        ['calm', tr('Calmo')],
+        ['normal', tr('Normal')],
+        ['lively', tr('Agitado')],
       ],
       (v) => ctx.updatePrefs({ liveliness: v }),
     );
     this.daylight = segmented<UiPrefs['daylight']>(
-      'Ciclo dia/noite',
+      tr('Ciclo dia/noite'),
       [
-        ['auto', 'Automático'],
-        ['day', 'Sempre dia'],
-        ['night', 'Sempre noite'],
+        ['auto', tr('Automático')],
+        ['day', tr('Sempre dia')],
+        ['night', tr('Sempre noite')],
       ],
       (v) => ctx.updatePrefs({ daylight: v }),
     );
-    this.daylight.row.append(h('span', { class: 'ui-set__hint', text: 'Automático: céu, luzes e sol nas janelas seguem a hora local.' }));
+    this.daylight.row.append(h('span', { class: 'ui-set__hint', text: tr('Automático: céu, luzes e sol nas janelas seguem a hora local.') }));
+    this.theme = segmented<UiPrefs['theme']>(
+      tr('Tema do escritório'),
+      [['auto', tr('Automático')], ['none', tr('Nenhum')], ['christmas', tr('Natal')], ['halloween', tr('Halloween')]],
+      (v) => ctx.updatePrefs({ theme: v }),
+    );
+    this.theme.row.append(h('span', { class: 'ui-set__hint', text: tr('Automático: Halloween em outubro e Natal de 1º de novembro a 26 de dezembro; no resto do ano, o visual original. Nenhum: sempre o original.') }));
     this.soundGroup = new SoundSettingsGroup(ctx, sound);
+
+    // Nomes dos idiomas sempre na própria língua, para quem não entende o idioma atual achar o seu.
+    this.language = segmented<LanguageChoice>(
+      tr('Idioma da interface'),
+      [['auto', tr('Automático')], ...LOCALES.map((l): [LanguageChoice, string] => [l.id, l.name])],
+      (v) => pickLanguage(v),
+    );
+    this.language.row.append(
+      h('span', { class: 'ui-set__hint', text: tr('Os textos das atividades vêm do servidor: seguem HABBLAUD_LANG ou o idioma do sistema onde o Habblaud roda (o inglês, só com HABBLAUD_LANG=en).') }),
+    );
 
     this.demoGroup = h(
       'div',
       { class: 'ui-set-group' },
-      h('h3', { text: 'Dados' }),
-      sw('demo', 'Modo demonstração', 'Coloca agentes fictícios no escritório, junto com os reais.', () => void this.toggleDemo()),
+      h('h3', { text: tr('Dados') }),
+      sw('demo', tr('Modo demonstração'), tr('Coloca agentes fictícios no escritório, junto com os reais.'), () => void this.toggleDemo()),
+    );
+
+    this.logoutBtn = h('button', { class: 'ui-btn', type: 'button', text: tr('Sair'), on: { click: () => void this.logout() } }) as HTMLButtonElement;
+    this.remoteGroup = h(
+      'div',
+      { class: 'ui-set-group', hidden: true },
+      h('h3', { text: tr('Acesso pelo celular') }),
+      h(
+        'div',
+        { class: 'ui-set' },
+        h(
+          'div',
+          { class: 'ui-set__text' },
+          h('span', { class: 'ui-set__label', text: tr('Sair deste aparelho') }),
+          h('span', { class: 'ui-set__hint', text: tr('Encerra o login aqui (uma cópia do cookie também deixa de valer). Para voltar, entre com usuário e senha.') }),
+        ),
+        this.logoutBtn,
+      ),
     );
 
     this.about = new AboutGroup(ctx);
 
-    const close = iconButton(ICONS.close, 'Fechar configurações', () => this.hide(), 'ui-icon-btn--sm');
+    const close = iconButton(ICONS.close, tr('Fechar configurações'), () => this.hide(), 'ui-icon-btn--sm');
     this.el = h(
       'div',
-      { class: 'ui-popover ui-settings', role: 'dialog', tabIndex: -1, attrs: { 'aria-label': 'Configurações', id: 'ui-settings', popover: 'auto' } },
-      h('div', { class: 'ui-popover__head' }, h('h2', { text: 'Configurações' }), close),
+      { class: 'ui-popover ui-settings', role: 'dialog', tabIndex: -1, attrs: { 'aria-label': tr('Configurações'), id: 'ui-settings', popover: 'auto' } },
+      h('div', { class: 'ui-popover__head' }, h('h2', { text: tr('Configurações') }), close),
+      h('div', { class: 'ui-set-group' }, h('h3', { text: tr('Aparência') }), this.theme.row),
       h(
         'div',
         { class: 'ui-set-group' },
-        h('h3', { text: 'Escritório' }),
-        sw('showNames', 'Mostrar nomes', 'Etiqueta com o nome acima de cada personagem.', flip('showNames')),
+        h('h3', { text: tr('Escritório') }),
+        sw('showNames', tr('Mostrar nomes'), tr('Etiqueta com o nome acima de cada personagem.'), flip('showNames')),
         this.bubbles.row,
         this.liveliness.row,
         this.daylight.row,
@@ -135,11 +200,13 @@ export class SettingsPopover implements UiComponent {
       h(
         'div',
         { class: 'ui-set-group' },
-        h('h3', { text: 'Avisos' }),
-        sw('browserNotifications', 'Notificações do navegador', 'Avisa quando alguém precisa de você e a aba está em segundo plano.', () => void this.toggleNotifications()),
+        h('h3', { text: tr('Avisos') }),
+        sw('browserNotifications', tr('Notificações do navegador'), tr('Avisa quando alguém precisa de você e a aba está em segundo plano.'), () => void this.toggleNotifications()),
       ),
       this.soundGroup.el,
+      h('div', { class: 'ui-set-group' }, h('h3', { text: tr('Idioma') }), this.language.row),
       this.demoGroup,
+      this.remoteGroup,
       this.about.el,
     );
     this.el.addEventListener('toggle', () => {
@@ -190,6 +257,14 @@ export class SettingsPopover implements UiComponent {
     this.ctx.root.classList.toggle('has-popover', this.isOpen);
   }
 
+  private async logout(): Promise<void> {
+    this.logoutBtn.disabled = true;
+    if (!(await remoteLogout())) {
+      this.logoutBtn.disabled = false;
+      this.ctx.announce(tr('Não foi possível sair: sem resposta do servidor.'));
+    }
+  }
+
   render(): void {
     const p = this.ctx.prefs;
     for (const [key, r] of this.switches) {
@@ -200,18 +275,21 @@ export class SettingsPopover implements UiComponent {
     this.bubbles.set(p.bubbles);
     this.liveliness.set(p.liveliness);
     this.daylight.set(p.daylight);
+    this.theme.set(p.theme);
+    this.language.set(savedLanguage());
     this.soundGroup.render();
-    setHidden(this.demoGroup, this.ctx.store.mock);
+    setHidden(this.demoGroup, this.ctx.store.mock || access().remote);
+    setHidden(this.remoteGroup, !access().remote);
     this.about.render();
 
     const notif = this.switches.get('browserNotifications')!;
     const state = notificationState();
     const hint =
       state === 'unsupported'
-        ? 'Este navegador não oferece notificações.'
+        ? tr('Este navegador não oferece notificações.')
         : state === 'denied'
-          ? 'Bloqueadas pelo navegador: libere nas permissões do site.'
-          : 'Avisa quando alguém precisa de você e a aba está em segundo plano.';
+          ? tr('Bloqueadas pelo navegador: libere nas permissões do site.')
+          : tr('Avisa quando alguém precisa de você e a aba está em segundo plano.');
     setText(notif.hint, hint);
     notif.btn.disabled = state === 'unsupported';
   }
@@ -223,7 +301,7 @@ export class SettingsPopover implements UiComponent {
     }
     const state = await this.notifier.enableBrowserNotifications();
     this.ctx.updatePrefs({ browserNotifications: state === 'granted' });
-    if (state === 'denied') this.ctx.announce('Notificações bloqueadas pelo navegador.');
+    if (state === 'denied') this.ctx.announce(tr('Notificações bloqueadas pelo navegador.'));
   }
 
   private async toggleDemo(): Promise<void> {
@@ -233,9 +311,9 @@ export class SettingsPopover implements UiComponent {
     const enable = !this.ctx.store.snapshot?.meta.demo;
     try {
       const ok = await this.ctx.store.setDemo(enable);
-      this.ctx.announce(ok ? (enable ? 'Modo demonstração ligado.' : 'Modo demonstração desligado.') : 'Não foi possível mudar o modo demonstração.');
+      this.ctx.announce(ok ? (enable ? tr('Modo demonstração ligado.') : tr('Modo demonstração desligado.')) : tr('Não foi possível mudar o modo demonstração.'));
     } catch {
-      this.ctx.announce('Não foi possível falar com o servidor.');
+      this.ctx.announce(tr('Não foi possível falar com o servidor.'));
     } finally {
       this.demoBusy = false;
       this.ctx.invalidate();

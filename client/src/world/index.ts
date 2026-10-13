@@ -3,7 +3,7 @@
 import * as artModule from '../art';
 import { TILE, type ArtModule } from '../art/api';
 import type { OfficeStore } from '../net/store';
-import { DEFAULT_WORLD_OPTIONS, type Selection, type SocialEvent, type SoundCue, type WorldApi, type WorldOptions, type WorldPlayback } from './api';
+import { DEFAULT_WORLD_OPTIONS, seasonalThemeFor, type Selection, type SocialEvent, type SoundCue, type WorldApi, type WorldOptions, type WorldPlayback } from './api';
 import { loadWorldAssets, type WorldAssets } from './assets';
 import { Camera, overviewFrame } from './camera';
 import { createDebug, type WorldDebug } from './debug';
@@ -36,6 +36,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
   const hoverCbs = new Set<(id: string | null) => void>();
   const socialCbs = new Set<(e: SocialEvent) => void>();
   const soundCbs = new Set<(c: SoundCue) => void>();
+  const roomMenuCbs = new Set<(roomId: string, at: { x: number; y: number }) => void>();
   let cues = new SoundCues(sim, camera);
   let selection: Selection = null;
   let hover: string | null = null;
@@ -218,7 +219,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
   });
 
   // medições de texto em cache: refaz quando alguma fonte termina de carregar
-  if (document.fonts) document.fonts.addEventListener?.('loadingdone', () => overlay.resetCaches());
+  if (document.fonts) document.fonts.addEventListener?.('loadingdone', () => overlay.resetCaches(), { signal: abort.signal });
 
   // ------------------------------------------------------------------ laço
 
@@ -242,7 +243,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
         if (!playback) for (const e of events) for (const cb of socialCbs) cb(e);
         events.length = 0;
       }
-      renderer.sync();
+      renderer.sync(seasonalThemeFor(options.theme, new Date()));
       if (sim.building.cols !== lastCols) {
         lastCols = sim.building.cols;
         updateBounds();
@@ -281,6 +282,25 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
     hiddenAt = 0;
   };
 
+  // Botão direito numa sala (ou num agente dentro dela): a UI oferece renomear a sala.
+  const onContextMenu = (e: MouseEvent) => {
+    if (!roomMenuCbs.size) return;
+    const r = canvas.getBoundingClientRect();
+    const sx = e.clientX - r.left;
+    const sy = e.clientY - r.top;
+    const hit = pick(sx, sy);
+    const w = camera.screenToWorld(sx, sy);
+    const roomId =
+      hit?.type === 'room'
+        ? hit.id
+        : hit?.type === 'agent'
+          ? (sim.chars.get(hit.id)?.roomId ?? null)
+          : ([...sim.rooms.values()].find((room) => room.present && !room.ghost && inRect(room.layout.rect, Math.floor(w.x / TILE), Math.floor(w.y / TILE)))?.id ?? null);
+    if (!roomId || !sim.rooms.has(roomId)) return;
+    e.preventDefault();
+    roomMenuCbs.forEach((cb) => cb(roomId, { x: e.clientX, y: e.clientY }));
+  };
+  canvas.addEventListener('contextmenu', onContextMenu);
   window.addEventListener('resize', resize);
   document.addEventListener('visibilitychange', onVisibility);
   resize();
@@ -360,6 +380,10 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
       return p;
     },
     social: (id) => sim.social.info(id),
+    onRoomContextMenu: (cb) => {
+      roomMenuCbs.add(cb);
+      return () => void roomMenuCbs.delete(cb);
+    },
     onSocialEvent: (cb) => {
       socialCbs.add(cb);
       return () => void socialCbs.delete(cb);
@@ -379,6 +403,7 @@ export function createWorld(canvas: HTMLCanvasElement, store: OfficeStore): Worl
       offSnapshot();
       detachInput();
       window.removeEventListener('resize', resize);
+      canvas.removeEventListener('contextmenu', onContextMenu);
       document.removeEventListener('visibilitychange', onVisibility);
       selectCbs.clear();
       hoverCbs.clear();

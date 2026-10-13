@@ -128,6 +128,12 @@ describe('textos', () => {
     expect(prettyModel('claude-opus-4-20250514')).toBe('Opus 4');
     expect(prettyModel('claude-3-5-sonnet-20241022')).toBe('Sonnet 3.5');
     expect(prettyModel('gpt-x')).toBe('gpt-x');
+    // Codex.
+    expect(prettyModel('gpt-5.3-codex')).toBe('GPT-5.3 Codex');
+    expect(prettyModel('gpt-5.1-codex-mini')).toBe('GPT-5.1 Codex Mini');
+    expect(prettyModel('gpt-5-codex')).toBe('GPT-5 Codex');
+    expect(prettyModel('gpt-5')).toBe('GPT-5');
+    expect(prettyModel('gpt-4o')).toBe('GPT-4o');
     expect(prettyModel(undefined)).toBe('—');
   });
   it('permissionLabel traduz modos conhecidos', () => {
